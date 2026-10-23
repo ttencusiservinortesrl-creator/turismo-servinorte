@@ -40,5 +40,6 @@ venv\Scripts\python manage.py createsuperuser
 venv\Scripts\python servir.py      (waitress, http://127.0.0.1:8050)
 venv\Scripts\python manage.py test cotizador
 ```
-Publicación: Render (Blueprint con `render.yaml`) + Supabase. Ver `docs/publicar-en-internet.md`.
+Publicación: Render (Blueprint con `render.yaml`) + Supabase (cuenta propia, distinta de la de repuestos).
+En línea: https://servinorte-turismo.onrender.com. Cada push a `main` se publica solo. Ver `docs/publicar-en-internet.md`.
 Nunca subir `.env`, `.secret_key`, `.credenciales_prueba_local` ni bases de datos.
