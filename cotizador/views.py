@@ -10,7 +10,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from . import calculo, rutas, word
+from . import calculo, excel, rutas, word
 from .forms import ClienteForm, CotizacionForm, MovimientoForm, ParametrosForm, TipoVehiculoForm
 from .models import Cliente, Cotizacion, Movimiento, Parametros, TipoVehiculo
 
@@ -216,6 +216,18 @@ def ventas(request):
     total_saldo = sum((v['saldo'] for v in lista_ventas), Decimal(0))
     return render(request, 'cotizador/ventas.html', {
         'ventas': lista_ventas, 'filtro': filtro, 'total_saldo': total_saldo, 'ahora': timezone.now()})
+
+
+@login_required
+def cuentas_excel(request):
+    """Todas las cuentas corrientes en Excel (o las de un cliente con ?cliente=id)."""
+    cliente_obj = get_object_or_404(Cliente, pk=request.GET['cliente']) if request.GET.get('cliente') else None
+    nombre = f'Cuenta_corriente_{cliente_obj.pk}' if cliente_obj else 'Cuentas_corrientes'
+    respuesta = HttpResponse(
+        excel.generar(cliente_obj),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    respuesta['Content-Disposition'] = f'attachment; filename="{nombre}_{timezone.localdate():%d-%m-%Y}.xlsx"'
+    return respuesta
 
 
 @login_required

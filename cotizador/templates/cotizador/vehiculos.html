@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% block title %}Vehículos{% endblock %}
 {% block content %}
-<h1 class="h3 mb-3">Tipos de vehículo</h1>
+<div class="encabezado"><h1><span class="icono"><i class="bi bi-bus-front"></i></span> Tipos de vehículo</h1></div>
 <div class="row g-3">
     <div class="col-lg-7">
         <div class="card shadow-sm">
@@ -31,7 +31,7 @@
                         {% include '_campo.html' with campo=campo clase='col-12' ayuda=True %}
                     {% endfor %}
                     <div class="col-12 d-flex gap-2">
-                        <button class="btn btn-success" type="submit">Guardar</button>
+                        <button class="btn btn-primary" type="submit"><i class="bi bi-check-lg"></i> Guardar</button>
                         {% if vehiculo %}<a class="btn btn-outline-secondary" href="{% url 'cotizador:vehiculos' %}">Cancelar</a>{% endif %}
                     </div>
                 </form>

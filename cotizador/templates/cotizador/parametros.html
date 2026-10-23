@@ -1,8 +1,8 @@
 {% extends 'base.html' %}
 {% block title %}Parámetros de precio{% endblock %}
 {% block content %}
-<div class="d-flex align-items-center mb-2">
-    <h1 class="h3 mb-0 me-auto">Parámetros de precio</h1>
+<div class="encabezado">
+    <h1><span class="icono"><i class="bi bi-sliders"></i></span> Parámetros de precio</h1>
 </div>
 <p class="text-muted">Estos valores arman el costo de cada viaje. Al cambiarlos, las cotizaciones <b>nuevas</b> (o las que edites y guardes) usan los valores nuevos; las ya guardadas quedan con el cálculo que tenían.
     {% if p.actualizado %}Última actualización: {{ p.actualizado|date:"d/m/Y H:i" }}{% if p.actualizado_por %} por {{ p.actualizado_por.get_full_name|default:p.actualizado_por.username }}{% endif %}.{% endif %}</p>
@@ -23,6 +23,6 @@
         </div>
         {% endfor %}
     </div>
-    <button class="btn btn-success btn-lg mt-3" type="submit"><i class="bi bi-check-lg"></i> Guardar parámetros</button>
+    <button class="btn btn-primary btn-lg mt-3" type="submit"><i class="bi bi-check-lg"></i> Guardar parámetros</button>
 </form>
 {% endblock %}

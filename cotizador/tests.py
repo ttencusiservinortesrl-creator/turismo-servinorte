@@ -224,3 +224,22 @@ class VentasTest(BaseVistas):
         self.assertContains(self.client.get(reverse('cotizador:nueva') + f'?cliente={cliente.pk}'), 'selected')
         self.client.post(reverse('cotizador:cliente_eliminar', args=[cliente.pk]))
         self.assertFalse(Cliente.objects.exists())
+
+
+class ExcelTest(BaseVistas):
+    def test_cuentas_corrientes_en_excel(self):
+        import openpyxl
+        self.client.post(reverse('cotizador:nueva'), self.post_datos())
+        cot = Cotizacion.objects.get()
+        self.client.post(reverse('cotizador:cambiar_estado', args=[cot.pk]), {'estado': 'aceptada'})
+        self.client.post(reverse('cotizador:movimiento_nuevo', args=[cot.pk]),
+                         {'fecha': '2026-10-25', 'tipo': 'pago', 'concepto': 'Seña', 'importe': '800000', 'medio': 'efectivo'})
+        for url in (reverse('cotizador:cuentas_excel'), reverse('cotizador:cuentas_excel') + f'?cliente={cot.cliente_id}'):
+            r = self.client.get(url)
+            self.assertEqual(r.status_code, 200)
+            wb = openpyxl.load_workbook(io.BytesIO(r.content))
+            self.assertEqual(wb.sheetnames, ['Resumen por cliente', 'Ventas', 'Movimientos'])
+            resumen = wb['Resumen por cliente']
+            self.assertEqual(resumen['A2'].value, 'Mauricio Vivas')
+            self.assertEqual(resumen['G2'].value, 1878500 - 800000)
+            self.assertEqual(wb['Movimientos']['I3'].value, 1078500)

@@ -15,6 +15,7 @@ urlpatterns = [
     path('<int:pk>/movimiento/', views.movimiento_nuevo, name='movimiento_nuevo'),
     path('movimiento/<int:pk>/eliminar/', views.movimiento_eliminar, name='movimiento_eliminar'),
     path('ventas/', views.ventas, name='ventas'),
+    path('ventas/excel/', views.cuentas_excel, name='cuentas_excel'),
     path('clientes/', views.clientes, name='clientes'),
     path('clientes/nuevo/', views.cliente_form, name='cliente_nuevo'),
     path('clientes/<int:pk>/', views.cliente, name='cliente'),

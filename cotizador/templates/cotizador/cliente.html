@@ -2,9 +2,10 @@
 {% load formato %}
 {% block title %}{{ cliente.nombre }}{% endblock %}
 {% block content %}
-<div class="d-flex flex-wrap gap-2 align-items-center mb-3">
-    <h1 class="h3 mb-0 me-auto">{{ cliente.nombre }}</h1>
+<div class="encabezado">
+    <h1><span class="icono"><i class="bi bi-person-vcard"></i></span> {{ cliente.nombre }}</h1>
     <a class="btn btn-primary" href="{% url 'cotizador:nueva' %}?cliente={{ cliente.pk }}"><i class="bi bi-plus-lg"></i> Nueva cotización</a>
+    <a class="btn btn-outline-secondary" href="{% url 'cotizador:cuentas_excel' %}?cliente={{ cliente.pk }}"><i class="bi bi-file-earmark-excel"></i> Cuenta en Excel</a>
     <a class="btn btn-outline-secondary" href="{% url 'cotizador:cliente_editar' cliente.pk %}"><i class="bi bi-pencil"></i> Editar datos</a>
 </div>
 <div class="row g-3">

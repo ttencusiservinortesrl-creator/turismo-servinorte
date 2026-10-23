@@ -2,8 +2,8 @@
 {% load formato %}
 {% block title %}COT {{ cot.numero }}{% endblock %}
 {% block content %}
-<div class="d-flex flex-wrap gap-2 align-items-center mb-3">
-    <h1 class="h3 mb-0 me-auto">COT {{ cot.numero }} – <a class="text-reset" href="{% url 'cotizador:cliente' cot.cliente_id %}">{{ cot.cliente.nombre }}</a>
+<div class="encabezado">
+    <h1><span class="icono"><i class="bi bi-file-earmark-check"></i></span> COT {{ cot.numero }} – <a class="text-reset" href="{% url 'cotizador:cliente' cot.cliente_id %}">{{ cot.cliente.nombre }}</a>
         <span class="fs-6 align-middle">{% include '_estado.html' with c=cot %}</span></h1>
     <a class="btn btn-primary" href="{% url 'cotizador:word' cot.pk %}"><i class="bi bi-file-earmark-word"></i> Descargar Word</a>
     <a class="btn btn-outline-secondary" href="{% url 'cotizador:editar' cot.pk %}"><i class="bi bi-pencil"></i> Editar</a>
@@ -45,13 +45,13 @@
 
 {% if cot.estado == 'aceptada' %}
 <div class="card shadow-sm mb-3 border-success">
-    <div class="card-header d-flex flex-wrap gap-3 align-items-center">
-        <span class="me-auto">Cuenta corriente de la venta</span>
-        <span class="fw-normal">Total: <b>$ {{ cargos|pesos }}</b></span>
-        <span class="fw-normal">Pagado: <b class="text-success">$ {{ pagado|pesos }}</b></span>
-        <span class="fw-normal">Saldo: <b class="{% if saldo > 0 %}text-danger{% else %}text-success{% endif %}">$ {{ saldo|pesos }}</b></span>
-    </div>
+    <div class="card-header">Cuenta corriente de la venta</div>
     <div class="card-body pb-0">
+        <div class="resumen-cc mb-3">
+            <div><div class="etiqueta">Total</div><div class="valor">$ {{ cargos|pesos }}</div></div>
+            <div><div class="etiqueta">Pagado</div><div class="valor text-success">$ {{ pagado|pesos }}</div></div>
+            <div><div class="etiqueta">Saldo</div><div class="valor {% if saldo > 0 %}text-danger{% else %}text-success{% endif %}">$ {{ saldo|pesos }}</div></div>
+        </div>
         {% if falta_sena > 0 %}<div class="alert alert-warning py-2">Falta la seña: el {{ cot.porcentaje_sena }}% son $ {{ sena|pesos }} (faltan $ {{ falta_sena|pesos }}). Sin seña el vehículo no queda reservado.</div>{% endif %}
         {% if pago_urgente %}<div class="alert alert-danger py-2">El viaje sale el {{ cot.salida|date:"d/m/Y H:i" }} y todavía debe $ {{ saldo|pesos }}. Según las condiciones, tiene que estar pago 72 hs hábiles antes.</div>{% endif %}
         {% if saldo <= 0 %}<div class="alert alert-success py-2">Venta cobrada por completo.</div>{% endif %}
@@ -87,7 +87,7 @@
             {% include '_campo.html' with campo=mov_form.importe clase='col-6 col-md-2' %}
             {% include '_campo.html' with campo=mov_form.medio clase='col-6 col-md-1' %}
             {% include '_campo.html' with campo=mov_form.referencia clase='col-8 col-md-2' %}
-            <div class="col-12 mb-2"><button class="btn btn-success" type="submit"><i class="bi bi-plus-lg"></i> Cargar</button>
+            <div class="col-12 mb-2"><button class="btn btn-primary" type="submit"><i class="bi bi-plus-lg"></i> Cargar</button>
                 <span class="small text-muted ms-2">Un "cargo" suma a lo que debe (ej.: km extra, horas de espera). Para un descuento, cargalo como pago con medio "Otro".</span></div>
         </form>
     </div>
@@ -103,7 +103,7 @@
                 <p class="mb-1"><b>Salida:</b> {{ cot.salida|date:"d/m/Y H:i" }} HS {{ cot.texto_salida }}</p>
                 <p class="mb-1"><b>Itinerario:</b> {{ cot.itinerario }}</p>
                 <p class="mb-3"><b>Regreso:</b> {{ cot.regreso|date:"d/m/Y H:i" }} HS.</p>
-                <div class="border border-primary rounded p-2 d-flex justify-content-between mb-3">
+                <div class="recuadro-word p-3 d-flex justify-content-between mb-3">
                     <b>{{ cot.cantidad_vehiculos|stringformat:"02d" }} {{ cot.descripcion_vehiculo }}</b>
                     <div class="text-end">
                         <div>TOTAL: $ {{ cot.tarifa_neta|pesos }}</div>

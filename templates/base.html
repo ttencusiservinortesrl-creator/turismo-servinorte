@@ -4,51 +4,51 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Cotizador{% endblock %} · Servinorte Turismo</title>
+    <link rel="icon" href="{% static 'img/logo.png' %}">
     <link rel="stylesheet" href="{% static 'vendor/bootstrap.min.css' %}">
     <link rel="stylesheet" href="{% static 'vendor/bootstrap-icons.css' %}">
-    <style>
-        body { background-color: #f5f6f8; }
-        .navbar { background: #1f3b7a; }
-        .card-header { font-weight: 600; }
-        .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
-        .fila-final { background: #e7f1ff; font-weight: 600; }
-        .estado-pendiente { background: #fff3cd; color: #664d03; }
-        .estado-aceptada { background: #d1e7dd; color: #0f5132; }
-        .estado-rechazada { background: #e9ecef; color: #6c757d; }
-    </style>
+    <link rel="stylesheet" href="{% static 'css/tema.css' %}">
     {% block extra_head %}{% endblock %}
 </head>
 <body>
-{% if user.is_authenticated %}
-<nav class="navbar navbar-expand-md navbar-dark px-3 mb-3">
-    <a class="navbar-brand fw-semibold" href="{% url 'cotizador:lista' %}"><i class="bi bi-bus-front"></i> Servinorte Turismo</a>
-    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#menu"><span class="navbar-toggler-icon"></span></button>
+{% block cuerpo %}
+{% with u=request.resolver_match.url_name %}
+<nav class="navbar navbar-expand-xl barra px-3 py-2 mb-4">
+    <a class="navbar-brand d-flex align-items-center" href="{% url 'cotizador:lista' %}">
+        <img src="{% static 'img/logo.png' %}" alt="Servinorte">
+        <span class="marca-sub d-none d-sm-inline">Turismo</span>
+    </a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#menu" aria-label="Menú"><span class="navbar-toggler-icon"></span></button>
     <div class="collapse navbar-collapse" id="menu">
-        <ul class="navbar-nav me-auto">
-            <li class="nav-item"><a class="nav-link" href="{% url 'cotizador:lista' %}">Cotizaciones</a></li>
-            <li class="nav-item"><a class="nav-link" href="{% url 'cotizador:nueva' %}"><i class="bi bi-plus-lg"></i> Nueva</a></li>
-            <li class="nav-item"><a class="nav-link" href="{% url 'cotizador:ventas' %}">Ventas y saldos</a></li>
-            <li class="nav-item"><a class="nav-link" href="{% url 'cotizador:clientes' %}">Clientes</a></li>
-            {% if perms.cotizador.change_parametros %}<li class="nav-item"><a class="nav-link" href="{% url 'cotizador:parametros' %}">Parámetros de precio</a></li>{% endif %}
-            {% if perms.cotizador.change_tipovehiculo %}<li class="nav-item"><a class="nav-link" href="{% url 'cotizador:vehiculos' %}">Vehículos</a></li>{% endif %}
+        <ul class="navbar-nav mx-xl-auto gap-1 my-2 my-xl-0">
+            <li class="nav-item"><a class="nav-link {% if u == 'lista' or u == 'detalle' or u == 'editar' %}active{% endif %}" href="{% url 'cotizador:lista' %}"><i class="bi bi-file-earmark-text"></i> Cotizaciones</a></li>
+            <li class="nav-item"><a class="nav-link {% if u == 'nueva' %}active{% endif %}" href="{% url 'cotizador:nueva' %}"><i class="bi bi-plus-circle"></i> Nueva</a></li>
+            <li class="nav-item"><a class="nav-link {% if u == 'ventas' %}active{% endif %}" href="{% url 'cotizador:ventas' %}"><i class="bi bi-wallet2"></i> Ventas y saldos</a></li>
+            <li class="nav-item"><a class="nav-link {% if u == 'clientes' or u == 'cliente' or u == 'cliente_nuevo' or u == 'cliente_editar' %}active{% endif %}" href="{% url 'cotizador:clientes' %}"><i class="bi bi-people"></i> Clientes</a></li>
+            {% if perms.cotizador.change_parametros %}<li class="nav-item"><a class="nav-link {% if u == 'parametros' %}active{% endif %}" href="{% url 'cotizador:parametros' %}"><i class="bi bi-sliders"></i> Parámetros</a></li>{% endif %}
+            {% if perms.cotizador.change_tipovehiculo %}<li class="nav-item"><a class="nav-link {% if u == 'vehiculos' or u == 'vehiculo_editar' %}active{% endif %}" href="{% url 'cotizador:vehiculos' %}"><i class="bi bi-bus-front"></i> Vehículos</a></li>{% endif %}
         </ul>
-        <span class="text-light small me-3">{{ user.get_full_name|default:user.username }}</span>
-        <form method="post" action="{% url 'logout' %}" class="d-inline">
-            {% csrf_token %}
-            <button class="btn btn-sm btn-outline-light" type="submit">Salir</button>
-        </form>
+        <div class="d-flex align-items-center gap-2">
+            <span class="usuario"><span class="avatar">{{ user.get_full_name|default:user.username|slice:":1" }}</span><span class="d-none d-xxl-inline">{{ user.get_full_name|default:user.username }}</span></span>
+            <form method="post" action="{% url 'logout' %}" class="d-inline">
+                {% csrf_token %}
+                <button class="btn btn-sm btn-outline-secondary" type="submit" title="Salir"><i class="bi bi-box-arrow-right"></i> Salir</button>
+            </form>
+        </div>
     </div>
 </nav>
-{% endif %}
-<main class="container-fluid px-3 px-lg-4 pb-5">
+{% endwith %}
+<main class="container-xxl px-3 px-lg-4 pb-4">
     {% for message in messages %}
-        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-            {{ message }}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %} alert-dismissible fade show d-flex align-items-center gap-2" role="alert">
+            <i class="bi {% if message.tags == 'error' %}bi-exclamation-triangle{% else %}bi-check-circle{% endif %}"></i> {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
         </div>
     {% endfor %}
     {% block content %}{% endblock %}
 </main>
+<footer class="pie">Servinorte SRL · Independencia 726, Salta</footer>
+{% endblock %}
 <script src="{% static 'vendor/bootstrap.bundle.min.js' %}"></script>
 {% block scripts %}{% endblock %}
 </body>

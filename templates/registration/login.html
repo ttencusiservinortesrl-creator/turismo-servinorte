@@ -1,26 +1,34 @@
 {% extends 'base.html' %}
+{% load static %}
 {% block title %}Ingresar{% endblock %}
-{% block content %}
-<div class="row justify-content-center mt-5">
-    <div class="col-sm-8 col-md-5 col-lg-4">
-        <div class="card shadow-sm">
-            <div class="card-body p-4">
-                <h1 class="h4 mb-3 text-center"><i class="bi bi-bus-front"></i> Servinorte Turismo</h1>
-                {% if form.errors %}<div class="alert alert-danger">Usuario o contraseña incorrectos.</div>{% endif %}
-                <form method="post">
-                    {% csrf_token %}
-                    <div class="mb-3">
-                        <label class="form-label" for="id_username">Usuario</label>
-                        <input class="form-control" type="text" name="username" id="id_username" autofocus required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label" for="id_password">Contraseña</label>
-                        <input class="form-control" type="password" name="password" id="id_password" required>
-                    </div>
-                    <input type="hidden" name="next" value="{{ next }}">
-                    <button class="btn btn-primary w-100" type="submit">Ingresar</button>
-                </form>
+{% block cuerpo %}
+<div class="pantalla-ingreso">
+    <div class="card">
+        <div class="card-body">
+            <div class="text-center mb-4">
+                <img src="{% static 'img/logo.png' %}" alt="Servinorte">
+                <div class="text-muted small mt-2">Cotizador de servicios de turismo</div>
             </div>
+            {% if form.errors %}<div class="alert alert-danger py-2"><i class="bi bi-exclamation-triangle"></i> Usuario o contraseña incorrectos.</div>{% endif %}
+            <form method="post">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold" for="id_username">Usuario</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-white"><i class="bi bi-person text-primary"></i></span>
+                        <input class="form-control" type="text" name="username" id="id_username" autofocus required autocomplete="username">
+                    </div>
+                </div>
+                <div class="mb-4">
+                    <label class="form-label small fw-semibold" for="id_password">Contraseña</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-white"><i class="bi bi-lock text-primary"></i></span>
+                        <input class="form-control" type="password" name="password" id="id_password" required autocomplete="current-password">
+                    </div>
+                </div>
+                <input type="hidden" name="next" value="{{ next }}">
+                <button class="btn btn-primary w-100 py-2" type="submit">Ingresar <i class="bi bi-arrow-right"></i></button>
+            </form>
         </div>
     </div>
 </div>

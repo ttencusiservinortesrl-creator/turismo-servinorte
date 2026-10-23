@@ -6,7 +6,7 @@ cotización con el modelo de la empresa. Usuaria: Tatiana (español rioplatense,
 
 ## Stack
 Django 6 server-rendered + Bootstrap 5 vendorizado en `static/vendor/` (sin Node, sin build). SQLite en local;
-PostgreSQL (Supabase) en línea vía `DATABASE_URL`. WhiteNoise sirve los estáticos. Sin librerías de Word: el
+PostgreSQL (Supabase) en línea vía `DATABASE_URL`. WhiteNoise sirve los estáticos. openpyxl para el Excel. Sin librerías de Word: el
 .docx se arma reemplazando marcas en el XML de la plantilla.
 
 ## Partes
@@ -17,6 +17,8 @@ PostgreSQL (Supabase) en línea vía `DATABASE_URL`. WhiteNoise sirve los estát
   vehículo × cantidad de vehículos; filas de margen mínimo/intermedio/mercado/óptimo y referencia por km.
 - `cotizador/rutas.py`: km por ruta con Nominatim (buscar lugar) + OSRM (distancia manejando). Servicios
   gratuitos de OpenStreetMap, sin clave; requieren User-Agent (`MAPAS_USER_AGENT`).
+- `cotizador/excel.py`: cuentas corrientes en Excel (resumen por cliente, ventas, movimientos con saldo), openpyxl.
+- `static/css/tema.css`: diseño (paleta de azules del logo #1F3B7A); el logo está en `static/img/logo.png`.
 - `cotizador/word.py` + `cotizador/plantilla/cotizacion.docx`: el Word. La plantilla se generó con
   `scripts/preparar_plantilla.py` desde un Word real (COT 299); las marcas son `{{FECHA}}`, `{{NUMERO}}`, etc.
   Los párrafos `{{INCLUYE}}` y `{{NO_INCLUYE}}` se repiten uno por renglón.

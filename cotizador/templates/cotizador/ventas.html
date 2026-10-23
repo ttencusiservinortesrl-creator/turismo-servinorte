@@ -2,12 +2,13 @@
 {% load formato %}
 {% block title %}Ventas y saldos{% endblock %}
 {% block content %}
-<div class="d-flex flex-wrap gap-2 align-items-center mb-3">
-    <h1 class="h3 mb-0 me-auto">Ventas y saldos</h1>
+<div class="encabezado">
+    <h1><span class="icono"><i class="bi bi-wallet2"></i></span> Ventas y saldos</h1>
     <div class="btn-group">
         <a class="btn btn-outline-secondary {% if filtro == 'saldo' %}active{% endif %}" href="?filtro=saldo">Con saldo pendiente</a>
         <a class="btn btn-outline-secondary {% if filtro == 'todas' %}active{% endif %}" href="?filtro=todas">Todas las aceptadas</a>
     </div>
+    <a class="btn btn-primary" href="{% url 'cotizador:cuentas_excel' %}"><i class="bi bi-file-earmark-excel"></i> Cuentas corrientes en Excel</a>
 </div>
 <p class="text-muted">Cotizaciones aceptadas, ordenadas por fecha de salida. Saldo pendiente total: <b class="text-danger">$ {{ total_saldo|pesos }}</b></p>
 <div class="card shadow-sm">

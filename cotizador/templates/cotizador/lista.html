@@ -2,8 +2,8 @@
 {% load formato %}
 {% block title %}Cotizaciones{% endblock %}
 {% block content %}
-<div class="d-flex flex-wrap gap-2 align-items-center mb-3">
-    <h1 class="h3 mb-0 me-auto">Cotizaciones</h1>
+<div class="encabezado">
+    <h1><span class="icono"><i class="bi bi-file-earmark-text"></i></span> Cotizaciones</h1>
     <form class="d-flex gap-2" method="get">
         {% if estado %}<input type="hidden" name="estado" value="{{ estado }}">{% endif %}
         <input class="form-control" type="search" name="q" value="{{ q }}" placeholder="Cliente, destino o número">

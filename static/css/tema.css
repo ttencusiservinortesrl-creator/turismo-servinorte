@@ -1,0 +1,181 @@
+/* Tema Servinorte Turismo: paleta de azules tomada del logo (#1F3B7A). */
+:root {
+    --azul-950: #0b1a3d;
+    --azul-900: #13285a;
+    --azul-800: #1f3b7a;   /* el del logo */
+    --azul-700: #274b98;
+    --azul-600: #2f5bb7;
+    --azul-500: #4a76d1;
+    --azul-300: #9db6e8;
+    --azul-200: #c9d8f4;
+    --azul-100: #e6edfa;
+    --azul-50:  #f3f6fc;
+    --texto: #1c2a45;
+    --texto-suave: #5d6b85;
+    --borde: #dfe6f3;
+    --radio: 14px;
+    --sombra: 0 1px 2px rgba(19, 40, 90, .06), 0 4px 16px rgba(19, 40, 90, .06);
+
+    --bs-primary: var(--azul-600);
+    --bs-primary-rgb: 47, 91, 183;
+    --bs-link-color: var(--azul-600);
+    --bs-link-color-rgb: 47, 91, 183;
+    --bs-link-hover-color: var(--azul-800);
+    --bs-link-hover-color-rgb: 31, 59, 122;
+    --bs-body-color: var(--texto);
+    --bs-body-bg: var(--azul-50);
+    --bs-border-color: var(--borde);
+    --bs-secondary-color: var(--texto-suave);
+    --bs-body-font-family: "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+body { background: var(--azul-50); color: var(--texto); }
+a { text-decoration: none; }
+a:hover { text-decoration: underline; }
+.text-muted { color: var(--texto-suave) !important; }
+
+/* ---- Barra superior ---- */
+.barra {
+    background: #fff;
+    border-bottom: 1px solid var(--borde);
+    box-shadow: 0 2px 10px rgba(19, 40, 90, .05);
+}
+.barra .navbar-brand img { height: 34px; width: auto; }
+.barra .marca-sub {
+    font-size: .72rem; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--azul-600); border-left: 1px solid var(--borde); padding-left: .75rem; margin-left: .75rem;
+}
+.barra .nav-link {
+    color: var(--azul-900); font-weight: 500; border-radius: 999px; padding: .45rem .9rem !important;
+    display: flex; align-items: center; gap: .4rem; white-space: nowrap;
+}
+.barra .nav-link:hover { background: var(--azul-50); color: var(--azul-700); text-decoration: none; }
+.barra .nav-link.active { background: var(--azul-100); color: var(--azul-800); }
+.barra .nav-link .bi { color: var(--azul-500); }
+.barra .btn { white-space: nowrap; }
+.barra .usuario {
+    display: inline-flex; align-items: center; gap: .5rem; color: var(--texto-suave); font-size: .9rem;
+}
+.barra .avatar {
+    width: 32px; height: 32px; border-radius: 50%; background: var(--azul-100); color: var(--azul-800);
+    display: inline-flex; align-items: center; justify-content: center; font-weight: 600; text-transform: uppercase;
+}
+.barra .navbar-toggler { border-color: var(--borde); }
+
+/* ---- Encabezado de página ---- */
+.encabezado { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; margin: .5rem 0 1.25rem; }
+.encabezado h1 {
+    font-size: 1.6rem; font-weight: 600; color: var(--azul-900); margin: 0; margin-right: auto;
+    display: flex; align-items: center; gap: .6rem;
+}
+.encabezado h1 .icono {
+    width: 42px; height: 42px; border-radius: 12px; background: var(--azul-100); color: var(--azul-700);
+    display: inline-flex; align-items: center; justify-content: center; font-size: 1.25rem; flex-shrink: 0;
+}
+.encabezado h1 a { color: inherit; }
+.bajada { color: var(--texto-suave); margin-top: -.75rem; margin-bottom: 1.25rem; }
+
+/* ---- Tarjetas ---- */
+.card { --bs-card-bg: #fff; border: 1px solid var(--borde); border-radius: var(--radio); box-shadow: var(--sombra); }
+.card.shadow-sm { box-shadow: var(--sombra) !important; }
+.card > .card-header:first-child { border-radius: var(--radio) var(--radio) 0 0; }
+.card-header {
+    background: #fff; border-bottom: 1px solid var(--borde); color: var(--azul-900);
+    font-weight: 600; padding: .85rem 1.1rem;
+}
+.card-header::before {
+    content: ""; display: inline-block; width: 4px; height: 1em; border-radius: 4px;
+    background: var(--azul-500); margin-right: .55rem; vertical-align: -2px;
+}
+.card-body { padding: 1.1rem; }
+.card > .table-responsive:last-child, .card > table:last-child { border-radius: 0 0 var(--radio) var(--radio); overflow: hidden; }
+.card.border-success { border-color: var(--azul-300) !important; }
+
+/* ---- Botones ---- */
+.btn { border-radius: 10px; font-weight: 500; }
+.btn-primary {
+    --bs-btn-bg: var(--azul-600); --bs-btn-border-color: var(--azul-600);
+    --bs-btn-hover-bg: var(--azul-700); --bs-btn-hover-border-color: var(--azul-700);
+    --bs-btn-active-bg: var(--azul-800); --bs-btn-active-border-color: var(--azul-800);
+    --bs-btn-disabled-bg: var(--azul-300); --bs-btn-disabled-border-color: var(--azul-300);
+    box-shadow: 0 2px 6px rgba(47, 91, 183, .25);
+}
+.btn-outline-primary {
+    --bs-btn-color: var(--azul-600); --bs-btn-border-color: var(--azul-200);
+    --bs-btn-hover-bg: var(--azul-100); --bs-btn-hover-color: var(--azul-800); --bs-btn-hover-border-color: var(--azul-300);
+    --bs-btn-active-bg: var(--azul-200); --bs-btn-active-color: var(--azul-900); --bs-btn-active-border-color: var(--azul-300);
+}
+.btn-outline-secondary {
+    --bs-btn-color: var(--azul-900); --bs-btn-border-color: var(--borde); --bs-btn-bg: #fff;
+    --bs-btn-hover-bg: var(--azul-50); --bs-btn-hover-color: var(--azul-800); --bs-btn-hover-border-color: var(--azul-200);
+    --bs-btn-active-bg: var(--azul-100); --bs-btn-active-color: var(--azul-900); --bs-btn-active-border-color: var(--azul-300);
+}
+.btn-link { --bs-btn-color: var(--azul-600); }
+
+/* ---- Formularios ---- */
+.form-control, .form-select { border-radius: 9px; border-color: var(--borde); }
+.form-control:focus, .form-select:focus {
+    border-color: var(--azul-500); box-shadow: 0 0 0 .2rem rgba(74, 118, 209, .18);
+}
+.form-check-input:checked { background-color: var(--azul-600); border-color: var(--azul-600); }
+.form-check-input:focus { box-shadow: 0 0 0 .2rem rgba(74, 118, 209, .18); }
+.campo label { font-size: .82rem; color: var(--texto-suave); font-weight: 500; margin-bottom: 3px; }
+.form-control.bg-light { background: var(--azul-50) !important; font-weight: 600; color: var(--azul-800); }
+
+/* ---- Tablas ---- */
+.table { --bs-table-hover-bg: var(--azul-50); margin-bottom: 0; }
+.table > :not(caption) > * > * { padding: .6rem .8rem; border-bottom-color: var(--borde); }
+.table thead.table-light th, .table thead th {
+    background: var(--azul-50); color: var(--texto-suave); font-size: .75rem; font-weight: 600;
+    text-transform: uppercase; letter-spacing: .04em; border-bottom: 1px solid var(--borde);
+}
+.table-secondary, .table-secondary > td { --bs-table-bg: var(--azul-100); --bs-table-color: var(--azul-900); }
+.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.fila-final > td { background: var(--azul-800) !important; color: #fff !important; font-weight: 600; }
+.fila-final .text-danger { color: #ffb4b4 !important; }
+
+/* ---- Filtros tipo pestaña ---- */
+.nav-pills .nav-link { color: var(--azul-900); border-radius: 999px; font-weight: 500; }
+.nav-pills .nav-link:hover { background: var(--azul-100); text-decoration: none; }
+.nav-pills .nav-link.active { background: var(--azul-700); }
+.nav-pills .nav-link .badge { background: rgba(255, 255, 255, .85) !important; color: var(--azul-800) !important; }
+.btn-group .btn.active { background: var(--azul-700); color: #fff; border-color: var(--azul-700); }
+
+/* ---- Estados ---- */
+.badge { font-weight: 600; border-radius: 999px; padding: .38em .75em; }
+.estado-pendiente { background: #fff4d6; color: #8a5a00; }
+.estado-aceptada { background: #daf3e6; color: #11663f; }
+.estado-rechazada { background: #eceff4; color: #6b7487; }
+
+/* ---- Avisos ---- */
+.alert { border-radius: 12px; border: 0; }
+.alert-info { background: var(--azul-100); color: var(--azul-900); }
+.alert-success { background: #e1f5ea; color: #12613d; }
+.alert-warning { background: #fff4d6; color: #7a5200; }
+.alert-danger { background: #fde7e7; color: #8f1d1d; }
+
+/* ---- Tarjetas de números (saldos) ---- */
+.cifra { font-size: 1.9rem; font-weight: 700; letter-spacing: -.01em; }
+.resumen-cc { display: flex; flex-wrap: wrap; gap: .75rem; }
+.resumen-cc > div {
+    flex: 1 1 140px; background: var(--azul-50); border-radius: 12px; padding: .6rem .9rem;
+}
+.resumen-cc .etiqueta { font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; color: var(--texto-suave); }
+.resumen-cc .valor { font-size: 1.25rem; font-weight: 700; color: var(--azul-900); }
+
+/* ---- Recuadro tipo Word ---- */
+.recuadro-word { border: 2px solid var(--azul-800) !important; border-radius: 10px !important; background: #fff; }
+
+/* ---- Ingreso ---- */
+.pantalla-ingreso {
+    min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1rem;
+    background:
+        radial-gradient(1200px 600px at 10% -10%, rgba(74, 118, 209, .35), transparent 60%),
+        radial-gradient(900px 500px at 110% 110%, rgba(47, 91, 183, .45), transparent 60%),
+        linear-gradient(135deg, var(--azul-900), var(--azul-700));
+}
+.pantalla-ingreso .card { width: 100%; max-width: 400px; border: 0; box-shadow: 0 20px 50px rgba(5, 15, 40, .35); }
+.pantalla-ingreso .card-body { padding: 2rem; }
+.pantalla-ingreso img { max-width: 230px; height: auto; }
+
+.pie { color: var(--texto-suave); font-size: .8rem; text-align: center; padding: 1.5rem 0 1rem; }
