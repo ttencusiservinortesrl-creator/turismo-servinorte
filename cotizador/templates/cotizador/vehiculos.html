@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% block title %}Vehículos{% endblock %}
+{% block content %}
+<h1 class="h3 mb-3">Tipos de vehículo</h1>
+<div class="row g-3">
+    <div class="col-lg-7">
+        <div class="card shadow-sm">
+            <table class="table table-hover mb-0 align-middle">
+                <thead class="table-light"><tr><th>Nombre</th><th class="num">Pasajeros</th><th class="num">Km/litro</th><th>En el Word</th><th></th></tr></thead>
+                <tbody>
+                {% for v in vehiculos %}
+                    <tr class="{% if not v.activo %}text-muted{% endif %}">
+                        <td>{{ v.nombre }}{% if not v.activo %} (inactivo){% endif %}</td>
+                        <td class="num">{{ v.capacidad }}</td>
+                        <td class="num">{{ v.rendimiento_km_litro }}</td>
+                        <td class="small">{{ v.descripcion_word }}</td>
+                        <td class="text-end"><a class="btn btn-sm btn-outline-secondary" href="{% url 'cotizador:vehiculo_editar' v.pk %}"><i class="bi bi-pencil"></i></a></td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="col-lg-5">
+        <div class="card shadow-sm">
+            <div class="card-header">{% if vehiculo %}Editar {{ vehiculo.nombre }}{% else %}Agregar vehículo{% endif %}</div>
+            <div class="card-body">
+                <form method="post" class="row g-2">
+                    {% csrf_token %}
+                    {% for campo in form %}
+                        {% include '_campo.html' with campo=campo clase='col-12' ayuda=True %}
+                    {% endfor %}
+                    <div class="col-12 d-flex gap-2">
+                        <button class="btn btn-success" type="submit">Guardar</button>
+                        {% if vehiculo %}<a class="btn btn-outline-secondary" href="{% url 'cotizador:vehiculos' %}">Cancelar</a>{% endif %}
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

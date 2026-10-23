@@ -1,0 +1,13 @@
+venv/
+__pycache__/
+*.pyc
+db.sqlite3
+*.sqlite3
+*.sqlite3-journal
+staticfiles/
+.env
+.env.*
+.secret_key
+.credenciales_prueba_local
+.claude/
+*.xlsx

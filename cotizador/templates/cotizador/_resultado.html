@@ -1,0 +1,52 @@
+{% load formato %}
+<div class="card shadow-sm mb-3">
+    <div class="card-header d-flex justify-content-between">
+        <span>Resumen</span>
+        <span class="text-muted small fw-normal">{{ r.km_totales|pesos }} km totales{% if r.capacidad %} · {{ r.capacidad }} pasajeros{% endif %}</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm mb-0 align-middle">
+            <thead class="table-light small">
+                <tr><th></th><th class="num">$ por km</th><th class="num">Total s/IVA</th><th class="num">Ganancia</th>
+                    <th class="num">Rent.</th><th class="num">$ por pax</th><th class="num">Con IVA</th>{% if usar %}<th></th>{% endif %}</tr>
+            </thead>
+            <tbody>
+            {% for f in r.filas %}
+                <tr{% if forloop.first %} class="table-secondary"{% endif %}>
+                    <td class="small">{{ f.nombre }}</td>
+                    <td class="num">{{ f.valor_km|pesos }}</td>
+                    <td class="num">{{ f.total|pesos }}</td>
+                    <td class="num">{{ f.ganancia|pesos }}</td>
+                    <td class="num">{{ f.rentabilidad|pesos:1 }}%</td>
+                    <td class="num">{{ f.por_pax|pesos }}</td>
+                    <td class="num">{{ f.bruto|pesos }}</td>
+                    {% if usar %}<td>{% if f.sugerido %}<button type="button" class="btn btn-sm btn-link p-0 usar-tarifa" data-valor="{{ f.sugerido }}" title="Usar {{ f.sugerido|pesos }} como tarifa">usar</button>{% endif %}</td>{% endif %}
+                </tr>
+            {% endfor %}
+            {% if r.final %}
+                <tr class="fila-final">
+                    <td>Tarifa final</td>
+                    <td class="num">{{ r.final.valor_km|pesos }}</td>
+                    <td class="num">{{ r.final.total|pesos }}</td>
+                    <td class="num {% if r.final.perdida %}text-danger{% endif %}">{{ r.final.ganancia|pesos }}</td>
+                    <td class="num">{{ r.final.rentabilidad|pesos:1 }}%</td>
+                    <td class="num">{{ r.final.por_pax|pesos }}</td>
+                    <td class="num">{{ r.final.bruto|pesos }}</td>
+                    {% if usar %}<td></td>{% endif %}
+                </tr>
+            {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+<div class="card shadow-sm">
+    <div class="card-header">Detalle del costo</div>
+    <table class="table table-sm mb-0">
+        <tbody>
+        {% for i in r.items %}
+            <tr><td>{{ i.nombre }} <div class="text-muted small">{{ i.detalle }}</div></td><td class="num">$ {{ i.importe|pesos }}</td></tr>
+        {% endfor %}
+        <tr class="table-secondary fw-semibold"><td>Costo total <span class="fw-normal small">($ {{ r.costo_km|pesos:2 }} por km)</span></td><td class="num">$ {{ r.costo|pesos }}</td></tr>
+        </tbody>
+    </table>
+</div>

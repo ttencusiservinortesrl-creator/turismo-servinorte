@@ -1,0 +1,10 @@
+<div class="campo {{ clase|default:'col-6 col-md-4' }} mb-2">
+    {% if campo.field.widget.input_type == 'checkbox' %}
+        <div class="form-check form-check-inline mt-1">{{ campo }} <label class="form-check-label" for="{{ campo.id_for_label }}">{{ campo.label }}</label></div>
+    {% else %}
+        <label for="{{ campo.id_for_label }}">{{ campo.label }}</label>
+        {{ campo }}
+    {% endif %}
+    {% if campo.help_text and ayuda %}<div class="form-text">{{ campo.help_text }}</div>{% endif %}
+    {% for e in campo.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+</div>

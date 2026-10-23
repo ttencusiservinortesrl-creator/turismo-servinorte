@@ -1,0 +1,50 @@
+{% load static %}<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Cotizador{% endblock %} · Servinorte Turismo</title>
+    <link rel="stylesheet" href="{% static 'vendor/bootstrap.min.css' %}">
+    <link rel="stylesheet" href="{% static 'vendor/bootstrap-icons.css' %}">
+    <style>
+        body { background-color: #f5f6f8; }
+        .navbar { background: #1f3b7a; }
+        .card-header { font-weight: 600; }
+        .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+        .fila-final { background: #e7f1ff; font-weight: 600; }
+    </style>
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+{% if user.is_authenticated %}
+<nav class="navbar navbar-expand-md navbar-dark px-3 mb-3">
+    <a class="navbar-brand fw-semibold" href="{% url 'cotizador:lista' %}"><i class="bi bi-bus-front"></i> Servinorte Turismo</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#menu"><span class="navbar-toggler-icon"></span></button>
+    <div class="collapse navbar-collapse" id="menu">
+        <ul class="navbar-nav me-auto">
+            <li class="nav-item"><a class="nav-link" href="{% url 'cotizador:lista' %}">Cotizaciones</a></li>
+            <li class="nav-item"><a class="nav-link" href="{% url 'cotizador:nueva' %}"><i class="bi bi-plus-lg"></i> Nueva</a></li>
+            {% if perms.cotizador.change_parametros %}<li class="nav-item"><a class="nav-link" href="{% url 'cotizador:parametros' %}">Parámetros de precio</a></li>{% endif %}
+            {% if perms.cotizador.change_tipovehiculo %}<li class="nav-item"><a class="nav-link" href="{% url 'cotizador:vehiculos' %}">Vehículos</a></li>{% endif %}
+        </ul>
+        <span class="text-light small me-3">{{ user.get_full_name|default:user.username }}</span>
+        <form method="post" action="{% url 'logout' %}" class="d-inline">
+            {% csrf_token %}
+            <button class="btn btn-sm btn-outline-light" type="submit">Salir</button>
+        </form>
+    </div>
+</nav>
+{% endif %}
+<main class="container-fluid px-3 px-lg-4 pb-5">
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    {% endfor %}
+    {% block content %}{% endblock %}
+</main>
+<script src="{% static 'vendor/bootstrap.bundle.min.js' %}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

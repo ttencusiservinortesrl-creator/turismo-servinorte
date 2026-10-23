@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+{% load formato %}
+{% block title %}COT {{ cot.numero }}{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+    <h1 class="h3 mb-0 me-auto">COT {{ cot.numero }} – {{ cot.cliente }}</h1>
+    <a class="btn btn-primary" href="{% url 'cotizador:word' cot.pk %}"><i class="bi bi-file-earmark-word"></i> Descargar Word</a>
+    <a class="btn btn-outline-secondary" href="{% url 'cotizador:editar' cot.pk %}"><i class="bi bi-pencil"></i> Editar</a>
+    <a class="btn btn-outline-secondary" href="{% url 'cotizador:nueva' %}?copiar={{ cot.pk }}"><i class="bi bi-copy"></i> Copiar como nueva</a>
+</div>
+<div class="row g-3">
+    <div class="col-lg-6">
+        <div class="card shadow-sm mb-3">
+            <div class="card-header">Lo que sale en el Word</div>
+            <div class="card-body">
+                <p class="text-end mb-2">Salta, {{ cot.fecha|date:"j \d\e F Y" }}</p>
+                <p class="mb-1"><b>Salida:</b> {{ cot.salida|date:"d/m/Y H:i" }} HS {{ cot.texto_salida }}</p>
+                <p class="mb-1"><b>Itinerario:</b> {{ cot.itinerario }}</p>
+                <p class="mb-3"><b>Regreso:</b> {{ cot.regreso|date:"d/m/Y H:i" }} HS.</p>
+                <div class="border border-primary rounded p-2 d-flex justify-content-between mb-3">
+                    <b>{{ cot.cantidad_vehiculos|stringformat:"02d" }} {{ cot.descripcion_vehiculo }}</b>
+                    <div class="text-end">
+                        <div>TOTAL: $ {{ cot.tarifa_neta|pesos }}</div>
+                        {% if r.final %}<div>+IVA: $ {{ r.final.iva|pesos }}</div><div><b>TOTAL: $ {{ r.final.bruto|pesos }}</b></div>{% endif %}
+                    </div>
+                </div>
+                <b>Incluye:</b><ul>{% for l in cot.incluye.splitlines %}{% if l.strip %}<li>{{ l }}</li>{% endif %}{% endfor %}</ul>
+                <b>No incluye:</b><ul class="mb-0">{% for l in cot.no_incluye.splitlines %}{% if l.strip %}<li>{{ l }}</li>{% endif %}{% endfor %}</ul>
+            </div>
+        </div>
+        <div class="card shadow-sm mb-3">
+            <div class="card-header">Datos del viaje</div>
+            <div class="card-body small">
+                <div class="row">
+                    <div class="col-6">Km en servicio: <b>{{ cot.km_servicio|pesos }}</b>{% if cot.km_mapa %} <span class="text-muted">(mapa: {{ cot.km_mapa|pesos }})</span>{% endif %}</div>
+                    <div class="col-6">Km vacíos: <b>{{ cot.km_vacios|pesos }}</b></div>
+                    <div class="col-6">Días / noches: <b>{{ cot.dias }} / {{ cot.noches }}</b></div>
+                    <div class="col-6">Choferes: <b>{{ cot.choferes }}</b> · viáticos c/u: <b>{{ cot.viaticos_por_chofer }}</b></div>
+                    <div class="col-6">Vehículo: <b>{{ cot.cantidad_vehiculos }} × {{ cot.vehiculo }}</b></div>
+                    <div class="col-6">Contacto: {{ cot.contacto|default:"—" }}</div>
+                </div>
+                {% if cot.notas_internas %}<hr><b>Notas internas:</b> {{ cot.notas_internas|linebreaksbr }}{% endif %}
+                <hr class="my-2"><span class="text-muted">Calculado con los parámetros vigentes el {{ cot.modificado|date:"d/m/Y H:i" }}{% if cot.creado_por %} · cargó {{ cot.creado_por.get_full_name|default:cot.creado_por.username }}{% endif %}.</span>
+            </div>
+        </div>
+        <form method="post" action="{% url 'cotizador:eliminar' cot.pk %}" onsubmit="return confirm('¿Eliminar la cotización {{ cot.numero }}? No se puede deshacer.');">
+            {% csrf_token %}
+            <button class="btn btn-sm btn-outline-danger" type="submit"><i class="bi bi-trash"></i> Eliminar cotización</button>
+        </form>
+    </div>
+    <div class="col-lg-6">
+        {% include 'cotizador/_resultado.html' %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,191 @@
+{% extends 'base.html' %}
+{% block title %}{% if cot %}Editar COT {{ cot.numero }}{% else %}Nueva cotización{% endif %}{% endblock %}
+{% block extra_head %}
+<style>
+    .campo label { font-size: .85rem; color: #555; margin-bottom: 2px; }
+    @media (min-width: 992px) { #resultado-col { position: sticky; top: 1rem; } }
+</style>
+{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center mb-3">
+    <h1 class="h3 mb-0 me-auto">{% if cot %}Editar COT {{ cot.numero }}{% else %}Nueva cotización{% endif %}</h1>
+    <a class="btn btn-outline-secondary" href="{% if cot %}{% url 'cotizador:detalle' cot.pk %}{% else %}{% url 'cotizador:lista' %}{% endif %}">Volver</a>
+</div>
+{% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
+{% if form.errors %}<div class="alert alert-danger">Revisá los campos marcados en rojo.</div>{% endif %}
+<form method="post" id="form-cot" novalidate>
+    {% csrf_token %}
+    {{ form.km_mapa }}
+    <div class="row g-3">
+        <div class="col-lg-7">
+            <div class="card shadow-sm mb-3">
+                <div class="card-header">Cliente</div>
+                <div class="card-body row g-2">
+                    {% include '_campo.html' with campo=form.numero clase='col-4 col-md-2' %}
+                    {% include '_campo.html' with campo=form.fecha clase='col-8 col-md-3' %}
+                    {% include '_campo.html' with campo=form.cliente clase='col-12 col-md-4' %}
+                    {% include '_campo.html' with campo=form.contacto clase='col-12 col-md-3' %}
+                </div>
+            </div>
+
+            <div class="card shadow-sm mb-3">
+                <div class="card-header">Recorrido y kilómetros</div>
+                <div class="card-body row g-2">
+                    {% include '_campo.html' with campo=form.origen clase='col-md-4' %}
+                    {% include '_campo.html' with campo=form.paradas clase='col-md-5' %}
+                    <div class="col-md-3 d-flex flex-column justify-content-end mb-2">
+                        {% include '_campo.html' with campo=form.ida_y_vuelta clase='' %}
+                        <button type="button" class="btn btn-primary" id="btn-km"><i class="bi bi-geo-alt"></i> Buscar km en el mapa</button>
+                    </div>
+                    <div class="col-12" id="km-info"></div>
+                    {% include '_campo.html' with campo=form.itinerario clase='col-12' %}
+                    {% include '_campo.html' with campo=form.km_servicio clase='col-4' %}
+                    {% include '_campo.html' with campo=form.km_vacios clase='col-4' %}
+                    <div class="campo col-4 mb-2"><label>Km totales</label><div class="form-control bg-light" id="km-totales">0</div></div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm mb-3">
+                <div class="card-header">Fechas</div>
+                <div class="card-body row g-2">
+                    {% include '_campo.html' with campo=form.salida clase='col-md-4' %}
+                    {% include '_campo.html' with campo=form.regreso clase='col-md-4' %}
+                    {% include '_campo.html' with campo=form.dias clase='col-6 col-md-2' %}
+                    {% include '_campo.html' with campo=form.noches clase='col-6 col-md-2' %}
+                    {% include '_campo.html' with campo=form.texto_salida clase='col-12' %}
+                </div>
+            </div>
+
+            <div class="card shadow-sm mb-3">
+                <div class="card-header">Vehículo, personal y gastos</div>
+                <div class="card-body row g-2">
+                    {% include '_campo.html' with campo=form.vehiculo clase='col-md-5' %}
+                    {% include '_campo.html' with campo=form.cantidad_vehiculos clase='col-6 col-md-3' %}
+                    {% include '_campo.html' with campo=form.descripcion_vehiculo clase='col-12 col-md-4' %}
+                    {% include '_campo.html' with campo=form.choferes clase='col-4' %}
+                    {% include '_campo.html' with campo=form.viaticos_por_chofer clase='col-4' %}
+                    {% include '_campo.html' with campo=form.habitaciones clase='col-4' %}
+                    <div class="col-12 mb-1">
+                        <span class="small text-muted me-2">Incluir en el costo:</span>
+                        {% include '_campo.html' with campo=form.incluye_hotel clase='d-inline-block' %}
+                        {% include '_campo.html' with campo=form.incluye_estacionamiento clase='d-inline-block' %}
+                        {% include '_campo.html' with campo=form.incluye_lavadero clase='d-inline-block' %}
+                    </div>
+                    {% include '_campo.html' with campo=form.peaje clase='col-6' %}
+                    {% include '_campo.html' with campo=form.otros_gastos clase='col-6' %}
+                </div>
+            </div>
+
+            <div class="card shadow-sm mb-3">
+                <div class="card-header">Precio y textos del Word</div>
+                <div class="card-body row g-2">
+                    {% include '_campo.html' with campo=form.tarifa_neta clase='col-md-6' %}
+                    <div class="col-md-6 small text-muted d-flex align-items-end mb-2">Tocá "usar" en el resumen para tomar un margen (se redondea a $10.000) o escribí el precio.</div>
+                    {% include '_campo.html' with campo=form.incluye clase='col-md-6' %}
+                    {% include '_campo.html' with campo=form.no_incluye clase='col-md-6' %}
+                    {% include '_campo.html' with campo=form.notas_internas clase='col-12' %}
+                </div>
+            </div>
+            <button class="btn btn-success btn-lg" type="submit"><i class="bi bi-check-lg"></i> Guardar cotización</button>
+        </div>
+        <div class="col-lg-5">
+            <div id="resultado-col">
+                <div id="resultado"><div class="text-muted">Completá los datos para ver el cálculo.</div></div>
+            </div>
+        </div>
+    </div>
+</form>
+{{ vehiculos|json_script:"vehiculos-data" }}
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+    const form = document.getElementById('form-cot');
+    const $ = (id) => document.getElementById('id_' + id);
+    const csrf = form.querySelector('[name=csrfmiddlewaretoken]').value;
+    const vehiculos = JSON.parse(document.getElementById('vehiculos-data').textContent);
+    let temporizador = null;
+
+    function kmTotales() {
+        const total = (parseFloat($('km_servicio').value) || 0) + (parseFloat($('km_vacios').value) || 0);
+        document.getElementById('km-totales').textContent = total.toLocaleString('es-AR');
+    }
+
+    function recalcular() {
+        kmTotales();
+        clearTimeout(temporizador);
+        temporizador = setTimeout(async () => {
+            const r = await fetch('{% url "cotizador:calcular" %}', {method: 'POST', body: new FormData(form)});
+            if (r.ok) document.getElementById('resultado').innerHTML = await r.text();
+        }, 300);
+    }
+
+    form.addEventListener('input', recalcular);
+    form.addEventListener('change', recalcular);
+
+    document.getElementById('resultado').addEventListener('click', (e) => {
+        const b = e.target.closest('.usar-tarifa');
+        if (!b) return;
+        $('tarifa_neta').value = Math.round(parseFloat(b.dataset.valor));
+        recalcular();
+    });
+
+    $('vehiculo').addEventListener('change', () => {
+        const v = vehiculos[$('vehiculo').value];
+        if (v) $('descripcion_vehiculo').value = v.descripcion;
+    });
+
+    // Días, noches y aclaración de la salida según las fechas.
+    let textoAuto = !$('texto_salida').value;
+    $('texto_salida').addEventListener('input', () => { textoAuto = false; });
+    function fechas() {
+        const s = $('salida').value, r = $('regreso').value;
+        if (!s || !r) return;
+        const ds = new Date(s.slice(0, 10) + 'T00:00'), dr = new Date(r.slice(0, 10) + 'T00:00');
+        const noches = Math.round((dr - ds) / 86400000);
+        if (noches < 0) return;
+        $('noches').value = noches;
+        $('dias').value = noches + 1;
+        if (textoAuto) {
+            const ciudad = $('origen').value.split(',')[0].trim();
+            $('texto_salida').value = 'desde ' + ciudad + '.' + (noches === 0 ? ' Ida y regreso en el día.' : '');
+        }
+    }
+    $('salida').addEventListener('change', fechas);
+    $('regreso').addEventListener('change', fechas);
+
+    document.getElementById('btn-km').addEventListener('click', async () => {
+        const info = document.getElementById('km-info');
+        const boton = document.getElementById('btn-km');
+        boton.disabled = true;
+        info.innerHTML = '<div class="text-muted small">Buscando en el mapa…</div>';
+        const datos = new FormData();
+        datos.append('origen', $('origen').value);
+        datos.append('paradas', $('paradas').value);
+        datos.append('ida_y_vuelta', $('ida_y_vuelta').checked ? 'on' : '');
+        try {
+            const r = await fetch('{% url "cotizador:buscar_km" %}', {method: 'POST', body: datos, headers: {'X-CSRFToken': csrf}});
+            const j = await r.json();
+            if (!r.ok) {
+                info.innerHTML = '<div class="alert alert-warning py-2 small">' + j.error + '</div>';
+                return;
+            }
+            $('km_servicio').value = j.km;
+            $('km_mapa').value = j.km;
+            $('itinerario').value = j.itinerario;
+            const tramos = j.tramos.map(t => t.desde + ' → ' + t.hasta + ': <b>' + t.km.toLocaleString('es-AR') + ' km</b>').join('<br>');
+            info.innerHTML = '<div class="alert alert-info py-2 small mb-1">' + tramos +
+                '<br>Total por ruta: <b>' + j.km.toLocaleString('es-AR') + ' km</b> (se cargó en "Km en servicio"; podés corregirlo).' +
+                '<div class="text-muted mt-1">Lugares encontrados: ' + j.encontrados.join(' | ') + '</div></div>';
+            recalcular();
+        } catch (e) {
+            info.innerHTML = '<div class="alert alert-warning py-2 small">No se pudo consultar el mapa. Revisá la conexión.</div>';
+        } finally {
+            boton.disabled = false;
+        }
+    });
+
+    recalcular();
+})();
+</script>
+{% endblock %}

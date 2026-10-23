@@ -1,0 +1,144 @@
+import io
+import zipfile
+from datetime import date, datetime
+from decimal import Decimal
+from unittest import mock
+
+from django.contrib.auth.models import User
+from django.test import TestCase
+from django.urls import reverse
+from django.utils import timezone
+
+from . import calculo, rutas, word
+from .models import Cotizacion, Lugar, Parametros, TipoVehiculo
+
+
+def datos_cot302(**cambios):
+    """Datos de la hoja COT302 de la planilla (Club Cachorros, Salta - San Martín, Córdoba)."""
+    datos = {
+        'km_servicio': 1400, 'km_vacios': 300, 'dias': 5, 'noches': 5, 'choferes': 2, 'viaticos_por_chofer': 10,
+        'habitaciones': 1, 'cantidad_vehiculos': 1, 'vehiculo': TipoVehiculo.objects.get(nombre='Piso elevado'),
+        'incluye_hotel': True, 'incluye_estacionamiento': True, 'incluye_lavadero': True,
+        'peaje': 0, 'otros_gastos': 0, 'tarifa_neta': Decimal(6950000),
+    }
+    datos.update(cambios)
+    return datos
+
+
+class CalculoTest(TestCase):
+    def test_coincide_con_la_planilla(self):
+        r = calculo.calcular(Parametros.actuales(), datos_cot302())
+        importes = {i['nombre']: i['importe'] for i in r['items']}
+        self.assertEqual(importes['Cargas sociales'], Decimal('398400.00'))
+        self.assertEqual(importes['Sueldo de conductor'], Decimal('830133.33'))
+        self.assertEqual(importes['Gastos de administración'], Decimal('49252.41'))
+        self.assertEqual(importes['Hotel'], Decimal('350000.00'))
+        self.assertEqual(importes['Viáticos'], Decimal('600000.00'))
+        self.assertEqual(importes['Combustible'], Decimal('1416666.67'))
+        self.assertEqual(importes['Depreciación'], Decimal('22947.50'))
+        self.assertEqual(importes['Seguro obligatorio'], Decimal('23809.52'))
+        # Total de la planilla: 4.071.209,43
+        self.assertEqual(r['costo'], Decimal('4071209.43'))
+        minimo = r['filas'][1]
+        self.assertEqual(minimo['valor_km'], Decimal('2874'))
+        self.assertEqual(minimo['total'], Decimal('4885800.00'))
+        self.assertEqual(r['final']['iva'], Decimal('729750.00'))
+        self.assertEqual(r['final']['por_pax'], Decimal('144791.67'))
+
+    def test_dos_vehiculos_duplican_costo(self):
+        p = Parametros.actuales()
+        uno = calculo.calcular(p, datos_cot302())['costo']
+        dos = calculo.calcular(p, datos_cot302(cantidad_vehiculos=2))['costo']
+        self.assertAlmostEqual(dos, uno * 2, delta=Decimal('0.1'))
+
+    def test_sin_km_no_divide_por_cero(self):
+        r = calculo.calcular(Parametros.actuales(), datos_cot302(km_servicio=0, km_vacios=0))
+        self.assertEqual(r['costo_km'], 0)
+
+
+class VistasTest(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_superuser('tatiana', 't@x.com', 'clave-segura-123')
+        self.client.force_login(self.user)
+        self.vehiculo = TipoVehiculo.objects.get(nombre='Piso elevado')
+
+    def post_datos(self, **cambios):
+        datos = {
+            'numero': 303, 'fecha': '2026-10-23', 'cliente': 'Mauricio Vivas', 'contacto': '',
+            'origen': 'Salta, Salta', 'paradas': 'Orán, Salta', 'ida_y_vuelta': 'on',
+            'itinerario': 'Salta, Salta – Orán, Salta – Salta, Salta. Con paradas intermedias.',
+            'km_servicio': '540', 'km_vacios': '60', 'km_mapa': '540',
+            'salida': '2026-11-09T07:00', 'regreso': '2026-11-09T19:30', 'texto_salida': 'desde Salta. Ida y regreso en el día.',
+            'dias': '1', 'noches': '0', 'vehiculo': self.vehiculo.pk, 'cantidad_vehiculos': '1',
+            'descripcion_vehiculo': 'BUS  Piso Elevado 50 pasajeros', 'choferes': '1', 'viaticos_por_chofer': '2',
+            'habitaciones': '1', 'incluye_estacionamiento': 'on', 'peaje': '0', 'otros_gastos': '0',
+            'tarifa_neta': '1700000', 'incluye': 'Traslado ida y regreso.\nViáticos de personal.',
+            'no_incluye': 'Gastos no especificados & extras.', 'notas_internas': '',
+        }
+        datos.update(cambios)
+        return datos
+
+    def test_requiere_login(self):
+        self.client.logout()
+        r = self.client.get(reverse('cotizador:lista'))
+        self.assertEqual(r.status_code, 302)
+
+    def test_crear_y_descargar_word(self):
+        r = self.client.post(reverse('cotizador:nueva'), self.post_datos())
+        self.assertEqual(r.status_code, 302, getattr(r, 'context', None) and r.context['form'].errors)
+        cot = Cotizacion.objects.get(numero=303)
+        self.assertGreater(cot.costo_total, 0)
+        self.assertIn('parametros', cot.detalle)
+
+        r = self.client.get(reverse('cotizador:word', args=[cot.pk]))
+        self.assertEqual(r.status_code, 200)
+        self.assertIn('COT_303_Mauricio_Vivas_09-11-26.docx', r['Content-Disposition'])
+        xml = zipfile.ZipFile(io.BytesIO(r.content)).read('word/document.xml').decode()
+        self.assertNotIn('{{', xml)
+        for texto in ('Salta, 23 de octubre 2026', '303', 'MAURICIO VIVAS', '09/11/2026 07:00 HS desde Salta',
+                      'TOTAL: $1.700.000', '+IVA 10,5%: $178.500', 'TOTAL: $1.878.500', 'Viáticos de personal.',
+                      'Gastos no especificados &amp; extras.', 'seña del 40%', 'vigencia de 7 días',
+                      '01 ', 'BUS  Piso Elevado 50 pasajeros'):
+            self.assertIn(texto, xml)
+
+        self.assertEqual(self.client.get(reverse('cotizador:detalle', args=[cot.pk])).status_code, 200)
+        self.assertEqual(self.client.get(reverse('cotizador:lista') + '?q=vivas').status_code, 200)
+        self.assertEqual(self.client.get(reverse('cotizador:nueva') + f'?copiar={cot.pk}').status_code, 200)
+
+    def test_vista_previa(self):
+        r = self.client.post(reverse('cotizador:calcular'), self.post_datos())
+        self.assertContains(r, 'Margen mínimo')
+        self.assertContains(r, 'Tarifa final')
+
+    def test_parametros_editables(self):
+        datos = {f.name: getattr(Parametros.actuales(), f.name) for f in Parametros._meta.concrete_fields
+                 if f.name not in ('id', 'actualizado', 'actualizado_por')}
+        datos['precio_combustible'] = '3000'
+        r = self.client.post(reverse('cotizador:parametros'), datos)
+        self.assertEqual(r.status_code, 302)
+        self.assertEqual(Parametros.actuales().precio_combustible, Decimal('3000'))
+
+    def test_usuario_sin_permiso_no_edita_parametros(self):
+        self.client.force_login(User.objects.create_user('vendedor', password='x'))
+        self.assertEqual(self.client.get(reverse('cotizador:parametros')).status_code, 403)
+
+    def test_buscar_km(self):
+        def falso_get(url, params=None, **kw):
+            respuesta = mock.Mock()
+            respuesta.raise_for_status = lambda: None
+            if 'nominatim' in url:
+                respuesta.json = lambda: [{'display_name': params['q'], 'lat': '-24.8', 'lon': '-65.4'}]
+            else:
+                respuesta.json = lambda: {'code': 'Ok', 'routes': [{'legs': [{'distance': 271451}, {'distance': 272017}]}]}
+            return respuesta
+
+        with mock.patch.object(rutas.requests, 'get', side_effect=falso_get):
+            r = self.client.post(reverse('cotizador:buscar_km'),
+                                 {'origen': 'Salta, Salta', 'paradas': 'Orán, Salta', 'ida_y_vuelta': 'on'})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()['km'], 543)
+        self.assertEqual(Lugar.objects.count(), 2)
+
+    def test_buscar_km_sin_destino(self):
+        r = self.client.post(reverse('cotizador:buscar_km'), {'origen': 'Salta', 'paradas': ''})
+        self.assertEqual(r.status_code, 400)

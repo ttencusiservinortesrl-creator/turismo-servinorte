@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block title %}Parámetros de precio{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center mb-2">
+    <h1 class="h3 mb-0 me-auto">Parámetros de precio</h1>
+</div>
+<p class="text-muted">Estos valores arman el costo de cada viaje. Al cambiarlos, las cotizaciones <b>nuevas</b> (o las que edites y guardes) usan los valores nuevos; las ya guardadas quedan con el cálculo que tenían.
+    {% if p.actualizado %}Última actualización: {{ p.actualizado|date:"d/m/Y H:i" }}{% if p.actualizado_por %} por {{ p.actualizado_por.get_full_name|default:p.actualizado_por.username }}{% endif %}.{% endif %}</p>
+{% if form.errors %}<div class="alert alert-danger">Revisá los campos marcados en rojo.</div>{% endif %}
+<form method="post">
+    {% csrf_token %}
+    <div class="row g-3">
+        {% for titulo, campos in grupos %}
+        <div class="col-lg-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header">{{ titulo }}</div>
+                <div class="card-body row g-2">
+                    {% for campo in campos %}
+                        {% include '_campo.html' with campo=campo clase='col-md-6' ayuda=True %}
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    <button class="btn btn-success btn-lg mt-3" type="submit"><i class="bi bi-check-lg"></i> Guardar parámetros</button>
+</form>
+{% endblock %}
