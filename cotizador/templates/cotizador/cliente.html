@@ -1,0 +1,84 @@
+{% extends 'base.html' %}
+{% load formato %}
+{% block title %}{{ cliente.nombre }}{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+    <h1 class="h3 mb-0 me-auto">{{ cliente.nombre }}</h1>
+    <a class="btn btn-primary" href="{% url 'cotizador:nueva' %}?cliente={{ cliente.pk }}"><i class="bi bi-plus-lg"></i> Nueva cotización</a>
+    <a class="btn btn-outline-secondary" href="{% url 'cotizador:cliente_editar' cliente.pk %}"><i class="bi bi-pencil"></i> Editar datos</a>
+</div>
+<div class="row g-3">
+    <div class="col-lg-4">
+        <div class="card shadow-sm mb-3">
+            <div class="card-header">Datos</div>
+            <div class="card-body small">
+                <div>CUIT / DNI: <b>{{ cliente.cuit|default:"—" }}</b></div>
+                <div>Condición de IVA: <b>{{ cliente.condicion_iva|default:"—" }}</b></div>
+                <div>Contacto: <b>{{ cliente.contacto|default:"—" }}</b></div>
+                <div>Teléfono: <b>{{ cliente.telefono|default:"—" }}</b></div>
+                <div>Mail: <b>{{ cliente.email|default:"—" }}</b></div>
+                <div>Dirección: <b>{{ cliente.direccion|default:"—" }}{% if cliente.localidad %}, {{ cliente.localidad }}{% endif %}</b></div>
+                {% if cliente.notas %}<hr class="my-2">{{ cliente.notas|linebreaksbr }}{% endif %}
+            </div>
+        </div>
+        <div class="card shadow-sm mb-3 {% if saldo > 0 %}border-danger{% else %}border-success{% endif %}">
+            <div class="card-body text-center">
+                <div class="text-muted small">Saldo de la cuenta corriente</div>
+                <div class="fs-3 fw-semibold {% if saldo > 0 %}text-danger{% else %}text-success{% endif %}">$ {{ saldo|pesos }}</div>
+                <div class="small text-muted">{% if saldo > 0 %}nos debe{% elif saldo < 0 %}a favor del cliente{% else %}al día{% endif %}</div>
+            </div>
+        </div>
+        {% if not cotizaciones %}
+        <form method="post" action="{% url 'cotizador:cliente_eliminar' cliente.pk %}" onsubmit="return confirm('¿Eliminar el cliente?');">{% csrf_token %}
+            <button class="btn btn-sm btn-outline-danger" type="submit"><i class="bi bi-trash"></i> Eliminar cliente</button>
+        </form>
+        {% endif %}
+    </div>
+    <div class="col-lg-8">
+        <div class="card shadow-sm mb-3">
+            <div class="card-header">Cotizaciones</div>
+            <div class="table-responsive">
+                <table class="table table-sm table-hover align-middle mb-0">
+                    <thead class="table-light"><tr><th>N°</th><th>Fecha</th><th>Itinerario</th><th>Salida</th><th class="num">Total c/IVA</th><th>Estado</th></tr></thead>
+                    <tbody>
+                    {% for c in cotizaciones %}
+                        <tr>
+                            <td><a href="{% url 'cotizador:detalle' c.pk %}">{{ c.numero }}</a></td>
+                            <td>{{ c.fecha|date:"d/m/Y" }}</td>
+                            <td class="small">{{ c.itinerario|truncatechars:50 }}</td>
+                            <td>{{ c.salida|date:"d/m/Y" }}</td>
+                            <td class="num">$ {{ c.total_con_iva|pesos }}</td>
+                            <td>{% include '_estado.html' %}</td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="6" class="text-center text-muted py-3">Sin cotizaciones.</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card shadow-sm">
+            <div class="card-header">Cuenta corriente (todas sus ventas)</div>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead class="table-light"><tr><th>Fecha</th><th>COT</th><th>Concepto</th><th class="num">Cargo</th><th class="num">Pago</th><th class="num">Saldo</th></tr></thead>
+                    <tbody>
+                    {% for m, s in movimientos %}
+                        <tr>
+                            <td>{{ m.fecha|date:"d/m/Y" }}</td>
+                            <td><a href="{% url 'cotizador:detalle' m.cotizacion_id %}">{{ m.cotizacion.numero }}</a></td>
+                            <td class="small">{{ m.concepto }}{% if m.medio %} · {{ m.get_medio_display }}{% endif %}{% if m.referencia %} · {{ m.referencia }}{% endif %}</td>
+                            <td class="num">{% if m.tipo == 'cargo' %}{{ m.importe|pesos }}{% endif %}</td>
+                            <td class="num text-success">{% if m.tipo == 'pago' %}{{ m.importe|pesos }}{% endif %}</td>
+                            <td class="num">{{ s|pesos }}</td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="6" class="text-center text-muted py-3">Sin movimientos. Aparecen cuando una cotización se marca como aceptada.</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

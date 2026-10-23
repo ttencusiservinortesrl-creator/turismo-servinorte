@@ -113,11 +113,41 @@ class Lugar(models.Model):
         return self.busqueda
 
 
+class Cliente(models.Model):
+    nombre = models.CharField('Nombre o razón social', max_length=200)
+    cuit = models.CharField('CUIT / DNI', max_length=20, blank=True)
+    condicion_iva = models.CharField('Condición de IVA', max_length=40, blank=True, choices=[
+        ('Consumidor Final', 'Consumidor Final'), ('Responsable Inscripto', 'Responsable Inscripto'),
+        ('Monotributista', 'Monotributista'), ('Exento', 'Exento')])
+    contacto = models.CharField('Persona de contacto', max_length=120, blank=True)
+    telefono = models.CharField('Teléfono', max_length=60, blank=True)
+    email = models.EmailField('Mail', blank=True)
+    direccion = models.CharField('Dirección', max_length=200, blank=True)
+    localidad = models.CharField(max_length=120, blank=True)
+    notas = models.TextField(blank=True)
+    creado = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['nombre']
+
+    def __str__(self):
+        return self.nombre
+
+    def saldo(self):
+        """Lo que debe en total por sus viajes aceptados (positivo = nos debe)."""
+        return sum((c.saldo() for c in self.cotizaciones.filter(estado=Cotizacion.ACEPTADA)), Decimal(0))
+
+
 class Cotizacion(models.Model):
+    PENDIENTE, ACEPTADA, RECHAZADA = 'pendiente', 'aceptada', 'rechazada'
+    ESTADOS = [(PENDIENTE, 'Pendiente'), (ACEPTADA, 'Aceptada'), (RECHAZADA, 'Rechazada')]
+
     numero = models.PositiveIntegerField('N° de cotización', unique=True)
     fecha = models.DateField('Fecha')
-    cliente = models.CharField(max_length=200)
-    contacto = models.CharField('Teléfono / mail', max_length=200, blank=True)
+    cliente = models.ForeignKey(Cliente, on_delete=models.PROTECT, related_name='cotizaciones')
+    estado = models.CharField(max_length=10, choices=ESTADOS, default=PENDIENTE)
+    fecha_estado = models.DateField('Fecha de aceptación / rechazo', null=True, blank=True)
+    motivo_rechazo = models.CharField('Motivo del rechazo', max_length=200, blank=True)
 
     # Recorrido
     origen = models.CharField(max_length=120)
@@ -179,3 +209,74 @@ class Cotizacion(models.Model):
     def proximo_numero(cls):
         ultimo = cls.objects.aggregate(m=models.Max('numero'))['m']
         return (ultimo or 302) + 1
+
+    @property
+    def porcentaje_iva(self):
+        return D(self.detalle.get('parametros', {}).get('IVA (%)', '10.5'))
+
+    @property
+    def total_con_iva(self):
+        """Lo que se le cobra al cliente: tarifa + IVA (igual que el Word)."""
+        return self.tarifa_neta + round(self.tarifa_neta * self.porcentaje_iva / 100)
+
+    @property
+    def importe_iva(self):
+        return self.total_con_iva - self.tarifa_neta
+
+    @property
+    def porcentaje_sena(self):
+        return int(self.detalle.get('parametros', {}).get('Seña (%)', 40))
+
+    def total_cargos(self):
+        return self.movimientos.filter(tipo=Movimiento.CARGO).aggregate(t=models.Sum('importe'))['t'] or D(0)
+
+    def total_pagos(self):
+        return self.movimientos.filter(tipo=Movimiento.PAGO).aggregate(t=models.Sum('importe'))['t'] or D(0)
+
+    def saldo(self):
+        return Decimal(self.total_cargos() - self.total_pagos()).quantize(Decimal('0.01'))
+
+    def sena_requerida(self):
+        return round(self.total_con_iva * self.porcentaje_sena / 100)
+
+    def actualizar_cargo_automatico(self):
+        """Al aceptar (o al cambiar el precio de una aceptada) el cargo del servicio sigue al total con IVA."""
+        if self.estado != self.ACEPTADA:
+            return
+        cargo = self.movimientos.filter(automatico=True).first()
+        concepto = f'Servicio COT {self.numero} (total con IVA)'
+        if cargo:
+            if cargo.importe != self.total_con_iva or cargo.concepto != concepto:
+                cargo.importe = self.total_con_iva
+                cargo.concepto = concepto
+                cargo.save()
+        else:
+            Movimiento.objects.create(cotizacion=self, fecha=self.fecha_estado or self.fecha, tipo=Movimiento.CARGO,
+                                      concepto=concepto, importe=self.total_con_iva, automatico=True)
+
+
+class Movimiento(models.Model):
+    """Cuenta corriente de una venta: cargos (lo que debe) y pagos (lo que pagó)."""
+    CARGO, PAGO = 'cargo', 'pago'
+    MEDIOS = [('efectivo', 'Efectivo'), ('transferencia', 'Transferencia'), ('cheque', 'Cheque'),
+              ('tarjeta', 'Tarjeta'), ('otro', 'Otro')]
+
+    cotizacion = models.ForeignKey(Cotizacion, on_delete=models.PROTECT, related_name='movimientos')
+    fecha = models.DateField()
+    tipo = models.CharField(max_length=10, choices=[(CARGO, 'Cargo (suma a la deuda)'), (PAGO, 'Pago / seña')])
+    concepto = models.CharField(max_length=200)
+    importe = models.DecimalField(max_digits=16, decimal_places=2)
+    medio = models.CharField('Medio de pago', max_length=20, choices=MEDIOS, blank=True)
+    referencia = models.CharField('Comprobante / referencia', max_length=120, blank=True,
+        help_text='N° de recibo, factura, transferencia o cheque.')
+    automatico = models.BooleanField(default=False, editable=False)
+    creado = models.DateTimeField(auto_now_add=True)
+    creado_por = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+
+    class Meta:
+        ordering = ['fecha', 'id']
+        verbose_name = 'movimiento de cuenta corriente'
+        verbose_name_plural = 'movimientos de cuenta corriente'
+
+    def __str__(self):
+        return f'{self.get_tipo_display()} {self.importe} – {self.concepto}'

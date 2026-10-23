@@ -5,37 +5,44 @@
 <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
     <h1 class="h3 mb-0 me-auto">Cotizaciones</h1>
     <form class="d-flex gap-2" method="get">
+        {% if estado %}<input type="hidden" name="estado" value="{{ estado }}">{% endif %}
         <input class="form-control" type="search" name="q" value="{{ q }}" placeholder="Cliente, destino o número">
         <button class="btn btn-outline-secondary" type="submit"><i class="bi bi-search"></i></button>
     </form>
     <a class="btn btn-primary" href="{% url 'cotizador:nueva' %}"><i class="bi bi-plus-lg"></i> Nueva cotización</a>
 </div>
+<ul class="nav nav-pills mb-3">
+    <li class="nav-item"><a class="nav-link {% if not estado %}active{% endif %}" href="?q={{ q|urlencode }}">Todas</a></li>
+    {% for clave, nombre, cantidad in estados %}
+    <li class="nav-item"><a class="nav-link {% if estado == clave %}active{% endif %}" href="?estado={{ clave }}&q={{ q|urlencode }}">{{ nombre }}s <span class="badge text-bg-light">{{ cantidad }}</span></a></li>
+    {% endfor %}
+</ul>
 <div class="card shadow-sm">
     <div class="table-responsive">
         <table class="table table-hover align-middle mb-0">
             <thead class="table-light">
                 <tr><th>N°</th><th>Fecha</th><th>Cliente</th><th>Itinerario</th><th>Salida</th><th>Vehículo</th>
-                    <th class="num">Km</th><th class="num">Tarifa s/IVA</th><th class="num">Ganancia</th><th></th></tr>
+                    <th class="num">Tarifa s/IVA</th><th class="num">Ganancia</th><th>Estado</th><th></th></tr>
             </thead>
             <tbody>
             {% for c in cotizaciones %}
                 <tr>
                     <td><a href="{% url 'cotizador:detalle' c.pk %}">{{ c.numero }}</a></td>
                     <td>{{ c.fecha|date:"d/m/Y" }}</td>
-                    <td>{{ c.cliente }}</td>
-                    <td class="small">{{ c.itinerario|truncatechars:60 }}</td>
+                    <td><a class="text-reset" href="{% url 'cotizador:cliente' c.cliente_id %}">{{ c.cliente.nombre }}</a></td>
+                    <td class="small">{{ c.itinerario|truncatechars:55 }}</td>
                     <td>{{ c.salida|date:"d/m/Y" }}</td>
                     <td>{{ c.cantidad_vehiculos }} × {{ c.vehiculo.nombre }}</td>
-                    <td class="num">{{ c.km_totales|pesos }}</td>
                     <td class="num">$ {{ c.tarifa_neta|pesos }}</td>
                     <td class="num">{% if c.detalle.final %}$ {{ c.detalle.final.ganancia|pesos }} <span class="text-muted small">({{ c.detalle.final.rentabilidad|pesos:1 }}%)</span>{% endif %}</td>
+                    <td>{% include '_estado.html' %}</td>
                     <td class="text-end text-nowrap">
                         <a class="btn btn-sm btn-outline-primary" href="{% url 'cotizador:word' c.pk %}" title="Descargar Word"><i class="bi bi-file-earmark-word"></i></a>
                         <a class="btn btn-sm btn-outline-secondary" href="{% url 'cotizador:nueva' %}?copiar={{ c.pk }}" title="Copiar como nueva"><i class="bi bi-copy"></i></a>
                     </td>
                 </tr>
             {% empty %}
-                <tr><td colspan="10" class="text-center text-muted py-4">Todavía no hay cotizaciones. <a href="{% url 'cotizador:nueva' %}">Cargá la primera</a>.</td></tr>
+                <tr><td colspan="10" class="text-center text-muted py-4">No hay cotizaciones{% if q or estado %} con ese filtro{% endif %}. <a href="{% url 'cotizador:nueva' %}">Cargar una nueva</a>.</td></tr>
             {% endfor %}
             </tbody>
         </table>

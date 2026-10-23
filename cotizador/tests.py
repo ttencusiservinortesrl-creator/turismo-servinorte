@@ -10,7 +10,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from . import calculo, rutas, word
-from .models import Cotizacion, Lugar, Parametros, TipoVehiculo
+from .models import Cliente, Cotizacion, Lugar, Movimiento, Parametros, TipoVehiculo
 
 
 def datos_cot302(**cambios):
@@ -56,7 +56,7 @@ class CalculoTest(TestCase):
         self.assertEqual(r['costo_km'], 0)
 
 
-class VistasTest(TestCase):
+class BaseVistas(TestCase):
     def setUp(self):
         self.user = User.objects.create_superuser('tatiana', 't@x.com', 'clave-segura-123')
         self.client.force_login(self.user)
@@ -64,7 +64,7 @@ class VistasTest(TestCase):
 
     def post_datos(self, **cambios):
         datos = {
-            'numero': 303, 'fecha': '2026-10-23', 'cliente': 'Mauricio Vivas', 'contacto': '',
+            'numero': 303, 'fecha': '2026-10-23', 'cliente': '', 'nuevo_cliente': 'Mauricio Vivas', 'nuevo_cliente_telefono': '387 555',
             'origen': 'Salta, Salta', 'paradas': 'Orán, Salta', 'ida_y_vuelta': 'on',
             'itinerario': 'Salta, Salta – Orán, Salta – Salta, Salta. Con paradas intermedias.',
             'km_servicio': '540', 'km_vacios': '60', 'km_mapa': '540',
@@ -78,6 +78,8 @@ class VistasTest(TestCase):
         datos.update(cambios)
         return datos
 
+
+class VistasTest(BaseVistas):
     def test_requiere_login(self):
         self.client.logout()
         r = self.client.get(reverse('cotizador:lista'))
@@ -142,3 +144,83 @@ class VistasTest(TestCase):
     def test_buscar_km_sin_destino(self):
         r = self.client.post(reverse('cotizador:buscar_km'), {'origen': 'Salta', 'paradas': ''})
         self.assertEqual(r.status_code, 400)
+
+
+class VentasTest(BaseVistas):
+    """Estado de la cotización, cuenta corriente y clientes."""
+
+    def crear(self, **cambios):
+        self.client.post(reverse('cotizador:nueva'), self.post_datos(**cambios))
+        return Cotizacion.objects.latest('id')
+
+    def test_cliente_nuevo_se_reutiliza(self):
+        cot = self.crear()
+        self.assertEqual(cot.cliente.nombre, 'Mauricio Vivas')
+        self.assertEqual(cot.cliente.telefono, '387 555')
+        otra = self.crear(numero=304, nuevo_cliente='mauricio vivas')
+        self.assertEqual(otra.cliente, cot.cliente)
+        tercera = self.crear(numero=305, nuevo_cliente='', cliente=cot.cliente.pk)
+        self.assertEqual(Cliente.objects.count(), 1)
+        self.assertEqual(tercera.cliente, cot.cliente)
+
+    def test_sin_cliente_da_error(self):
+        r = self.client.post(reverse('cotizador:nueva'), self.post_datos(nuevo_cliente=''))
+        self.assertEqual(r.status_code, 200)
+        self.assertFalse(Cotizacion.objects.exists())
+
+    def test_aceptar_cobrar_y_saldo(self):
+        cot = self.crear()
+        self.assertEqual(cot.estado, Cotizacion.PENDIENTE)
+        self.client.post(reverse('cotizador:cambiar_estado', args=[cot.pk]), {'estado': 'aceptada'})
+        cot.refresh_from_db()
+        self.assertEqual(cot.estado, Cotizacion.ACEPTADA)
+        # El cargo automático es el total con IVA (1.700.000 + 10,5%)
+        self.assertEqual(cot.total_cargos(), Decimal('1878500'))
+        self.assertEqual(cot.sena_requerida(), 751400)
+
+        url = reverse('cotizador:movimiento_nuevo', args=[cot.pk])
+        self.client.post(url, {'fecha': '2026-10-25', 'tipo': 'pago', 'concepto': 'Seña', 'importe': '800000',
+                               'medio': 'transferencia', 'referencia': 'op 123'})
+        self.client.post(url, {'fecha': '2026-10-26', 'tipo': 'cargo', 'concepto': 'Km extra', 'importe': '50000'})
+        self.assertEqual(cot.saldo(), Decimal('1128500.00'))
+        # Pago sin medio: no se carga
+        self.client.post(url, {'fecha': '2026-10-26', 'tipo': 'pago', 'concepto': 'x', 'importe': '10'})
+        self.assertEqual(cot.movimientos.count(), 3)
+
+        r = self.client.get(reverse('cotizador:detalle', args=[cot.pk]))
+        self.assertContains(r, 'Cuenta corriente de la venta')
+        r = self.client.get(reverse('cotizador:ventas'))
+        self.assertContains(r, 'Mauricio Vivas')
+        r = self.client.get(reverse('cotizador:cliente', args=[cot.cliente_id]))
+        self.assertContains(r, '1.128.500')
+
+        # Si cambia el precio, el cargo automático sigue al nuevo total
+        self.client.post(reverse('cotizador:editar', args=[cot.pk]),
+                         self.post_datos(cliente=cot.cliente_id, nuevo_cliente='', tarifa_neta='2000000'))
+        self.assertEqual(cot.movimientos.get(automatico=True).importe, Decimal('2210000'))
+
+        # Con pagos cargados no se puede rechazar ni eliminar
+        self.client.post(reverse('cotizador:cambiar_estado', args=[cot.pk]), {'estado': 'rechazada'})
+        cot.refresh_from_db()
+        self.assertEqual(cot.estado, Cotizacion.ACEPTADA)
+        self.client.post(reverse('cotizador:eliminar', args=[cot.pk]))
+        self.assertTrue(Cotizacion.objects.filter(pk=cot.pk).exists())
+
+    def test_rechazar_y_volver(self):
+        cot = self.crear()
+        self.client.post(reverse('cotizador:cambiar_estado', args=[cot.pk]), {'estado': 'aceptada'})
+        self.client.post(reverse('cotizador:cambiar_estado', args=[cot.pk]), {'estado': 'rechazada', 'motivo': 'Precio'})
+        cot.refresh_from_db()
+        self.assertEqual((cot.estado, cot.motivo_rechazo), (Cotizacion.RECHAZADA, 'Precio'))
+        self.assertFalse(Movimiento.objects.exists())
+        r = self.client.get(reverse('cotizador:lista') + '?estado=rechazada')
+        self.assertContains(r, 'Mauricio Vivas')
+
+    def test_pantallas_de_clientes(self):
+        r = self.client.post(reverse('cotizador:cliente_nuevo'), {'nombre': 'Colegio X', 'cuit': '30-1', 'email': ''})
+        cliente = Cliente.objects.get(nombre='Colegio X')
+        self.assertRedirects(r, reverse('cotizador:cliente', args=[cliente.pk]))
+        self.assertContains(self.client.get(reverse('cotizador:clientes') + '?q=colegio'), 'Colegio X')
+        self.assertContains(self.client.get(reverse('cotizador:nueva') + f'?cliente={cliente.pk}'), 'selected')
+        self.client.post(reverse('cotizador:cliente_eliminar', args=[cliente.pk]))
+        self.assertFalse(Cliente.objects.exists())

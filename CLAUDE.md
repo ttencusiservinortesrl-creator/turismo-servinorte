@@ -11,7 +11,8 @@ PostgreSQL (Supabase) en línea vía `DATABASE_URL`. WhiteNoise sirve los estát
 
 ## Partes
 - `cotizador/models.py`: `Parametros` (una sola fila, todos los valores que componen el precio), `TipoVehiculo`,
-  `Cotizacion` (guarda en `detalle` el cálculo y los parámetros usados al guardar), `Lugar` (caché del mapa).
+  `Cliente`, `Cotizacion` (guarda en `detalle` el cálculo y los parámetros usados al guardar; estado
+  pendiente/aceptada/rechazada), `Movimiento` (cuenta corriente de cada venta: cargos y pagos), `Lugar` (caché del mapa).
 - `cotizador/calculo.py`: costo del viaje igual que la planilla (testeado contra la hoja COT302). Ítems por
   vehículo × cantidad de vehículos; filas de margen mínimo/intermedio/mercado/óptimo y referencia por km.
 - `cotizador/rutas.py`: km por ruta con Nominatim (buscar lugar) + OSRM (distancia manejando). Servicios
@@ -24,6 +25,10 @@ PostgreSQL (Supabase) en línea vía `DATABASE_URL`. WhiteNoise sirve los estát
 - Cambiar parámetros no toca las cotizaciones guardadas; al editar y guardar una, se recalcula con los de hoy.
 - Km totales = km en servicio + km vacíos. El mapa carga los km en servicio; se pueden corregir a mano.
 - "usar" en el resumen redondea la tarifa a $10.000.
+- Aceptar una cotización la convierte en venta: crea un cargo automático por el total con IVA, que se
+  actualiza solo si cambia el precio. Con pagos o cargos manuales no se puede rechazar ni eliminar.
+- Cuenta corriente del cliente = movimientos de todas sus cotizaciones aceptadas (no hay tabla aparte).
+- En la cotización se elige un cliente o se escribe uno nuevo (se crea la ficha; si el nombre ya existe, se reutiliza).
 - Parámetros y vehículos requieren permiso (`change_parametros`, `change_tipovehiculo`); el resto, login.
 
 ## Cómo correrlo

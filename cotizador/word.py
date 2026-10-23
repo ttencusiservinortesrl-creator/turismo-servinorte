@@ -2,6 +2,7 @@
 import io
 import re
 import zipfile
+from decimal import Decimal
 from pathlib import Path
 from xml.sax.saxutils import escape
 
@@ -19,7 +20,8 @@ def pesos(valor):
 
 
 def porcentaje(valor):
-    return f'{valor:g}'.replace('.', ',')
+    """10.50 -> '10,5'"""
+    return f'{Decimal(valor).normalize():f}'.replace('.', ',')
 
 
 def _repetir_parrafo(xml, marca, renglones):
@@ -36,9 +38,8 @@ def generar(cot):
     salida = timezone.localtime(cot.salida)
     regreso = timezone.localtime(cot.regreso)
     neto = cot.tarifa_neta
-    porc_iva = cot.detalle.get('parametros', {}).get('IVA (%)')
-    porc_iva = float(porc_iva) if porc_iva else 10.5
-    iva = round(float(neto) * porc_iva / 100)
+    porc_iva = cot.porcentaje_iva
+    bruto = cot.total_con_iva
     parametros = cot.detalle.get('parametros', {})
 
     texto_salida = salida.strftime('%d/%m/%Y %H:%M HS')
@@ -47,7 +48,7 @@ def generar(cot):
     valores = {
         'FECHA': f'Salta, {cot.fecha.day} de {MESES[cot.fecha.month - 1]} {cot.fecha.year}',
         'NUMERO': str(cot.numero),
-        'CLIENTE': cot.cliente.upper(),
+        'CLIENTE': cot.cliente.nombre.upper(),
         'SALIDA': texto_salida,
         'ITINERARIO': cot.itinerario,
         'REGRESO': regreso.strftime('%d/%m/%Y %H:%M HS.'),
@@ -55,8 +56,8 @@ def generar(cot):
         'VEHICULO': cot.descripcion_vehiculo,
         'NETO': pesos(neto),
         'IVA_PORC': porcentaje(porc_iva),
-        'IVA': pesos(iva),
-        'BRUTO': pesos(float(neto) + iva),
+        'IVA': pesos(bruto - neto),
+        'BRUTO': pesos(bruto),
         'VIGENCIA': parametros.get('Vigencia de la cotización (días)', '7'),
         'SENA': parametros.get('Seña (%)', '40'),
     }
@@ -78,5 +79,5 @@ def generar(cot):
 
 
 def nombre_archivo(cot):
-    cliente = re.sub(r'[^A-Za-z0-9]+', '_', cot.cliente).strip('_') or 'cliente'
+    cliente = re.sub(r'[^A-Za-z0-9]+', '_', cot.cliente.nombre).strip('_') or 'cliente'
     return f'COT_{cot.numero}_{cliente}_{timezone.localtime(cot.salida):%d-%m-%y}.docx'

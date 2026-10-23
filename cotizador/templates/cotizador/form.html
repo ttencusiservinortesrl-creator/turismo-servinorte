@@ -23,8 +23,13 @@
                 <div class="card-body row g-2">
                     {% include '_campo.html' with campo=form.numero clase='col-4 col-md-2' %}
                     {% include '_campo.html' with campo=form.fecha clase='col-8 col-md-3' %}
-                    {% include '_campo.html' with campo=form.cliente clase='col-12 col-md-4' %}
-                    {% include '_campo.html' with campo=form.contacto clase='col-12 col-md-3' %}
+                    {% include '_campo.html' with campo=form.cliente clase='col-12 col-md-7' %}
+                    <div class="col-12 small"><a href="#" id="ver-nuevo-cliente"{% if form.nuevo_cliente.value %} class="d-none"{% endif %}><i class="bi bi-person-plus"></i> Es un cliente nuevo</a></div>
+                    <div class="row g-2 m-0 p-0{% if not form.nuevo_cliente.value %} d-none{% endif %}" id="nuevo-cliente">
+                        {% include '_campo.html' with campo=form.nuevo_cliente clase='col-md-7' %}
+                        {% include '_campo.html' with campo=form.nuevo_cliente_telefono clase='col-md-5' %}
+                        <div class="col-12 form-text mt-0">Se crea la ficha del cliente al guardar; después podés completar CUIT, mail, etc. en Clientes.</div>
+                    </div>
                 </div>
             </div>
 
@@ -128,6 +133,14 @@
         if (!b) return;
         $('tarifa_neta').value = Math.round(parseFloat(b.dataset.valor));
         recalcular();
+    });
+
+    document.getElementById('ver-nuevo-cliente').addEventListener('click', (e) => {
+        e.preventDefault();
+        e.target.closest('div').classList.add('d-none');
+        document.getElementById('nuevo-cliente').classList.remove('d-none');
+        $('cliente').value = '';
+        $('nuevo_cliente').focus();
     });
 
     $('vehiculo').addEventListener('change', () => {

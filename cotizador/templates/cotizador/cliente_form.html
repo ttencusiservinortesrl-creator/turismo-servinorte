@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block title %}{% if cliente %}Editar {{ cliente.nombre }}{% else %}Nuevo cliente{% endif %}{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center mb-3">
+    <h1 class="h3 mb-0 me-auto">{% if cliente %}Editar {{ cliente.nombre }}{% else %}Nuevo cliente{% endif %}</h1>
+    <a class="btn btn-outline-secondary" href="{% if cliente %}{% url 'cotizador:cliente' cliente.pk %}{% else %}{% url 'cotizador:clientes' %}{% endif %}">Volver</a>
+</div>
+<div class="card shadow-sm" style="max-width: 900px">
+    <div class="card-body">
+        <form method="post" class="row g-2">
+            {% csrf_token %}
+            {% include '_campo.html' with campo=form.nombre clase='col-md-8' %}
+            {% include '_campo.html' with campo=form.cuit clase='col-md-4' %}
+            {% include '_campo.html' with campo=form.condicion_iva clase='col-md-4' %}
+            {% include '_campo.html' with campo=form.contacto clase='col-md-4' %}
+            {% include '_campo.html' with campo=form.telefono clase='col-md-4' %}
+            {% include '_campo.html' with campo=form.email clase='col-md-4' %}
+            {% include '_campo.html' with campo=form.direccion clase='col-md-5' %}
+            {% include '_campo.html' with campo=form.localidad clase='col-md-3' %}
+            {% include '_campo.html' with campo=form.notas clase='col-12' %}
+            <div class="col-12"><button class="btn btn-success" type="submit"><i class="bi bi-check-lg"></i> Guardar</button></div>
+        </form>
+    </div>
+</div>
+{% endblock %}

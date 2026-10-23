@@ -3,11 +3,97 @@
 {% block title %}COT {{ cot.numero }}{% endblock %}
 {% block content %}
 <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
-    <h1 class="h3 mb-0 me-auto">COT {{ cot.numero }} – {{ cot.cliente }}</h1>
+    <h1 class="h3 mb-0 me-auto">COT {{ cot.numero }} – <a class="text-reset" href="{% url 'cotizador:cliente' cot.cliente_id %}">{{ cot.cliente.nombre }}</a>
+        <span class="fs-6 align-middle">{% include '_estado.html' with c=cot %}</span></h1>
     <a class="btn btn-primary" href="{% url 'cotizador:word' cot.pk %}"><i class="bi bi-file-earmark-word"></i> Descargar Word</a>
     <a class="btn btn-outline-secondary" href="{% url 'cotizador:editar' cot.pk %}"><i class="bi bi-pencil"></i> Editar</a>
     <a class="btn btn-outline-secondary" href="{% url 'cotizador:nueva' %}?copiar={{ cot.pk }}"><i class="bi bi-copy"></i> Copiar como nueva</a>
 </div>
+
+{# Estado: aceptada / rechazada #}
+<div class="card shadow-sm mb-3">
+    <div class="card-body d-flex flex-wrap gap-2 align-items-center">
+        {% if cot.estado == 'pendiente' %}
+            <span class="me-auto">¿El cliente respondió?</span>
+            <form method="post" action="{% url 'cotizador:cambiar_estado' cot.pk %}">{% csrf_token %}
+                <input type="hidden" name="estado" value="aceptada">
+                <button class="btn btn-success" type="submit"><i class="bi bi-check-circle"></i> Aceptada</button>
+            </form>
+            <form method="post" action="{% url 'cotizador:cambiar_estado' cot.pk %}" class="d-flex gap-2">{% csrf_token %}
+                <input type="hidden" name="estado" value="rechazada">
+                <input class="form-control" name="motivo" placeholder="Motivo (opcional): precio, fecha…">
+                <button class="btn btn-outline-danger text-nowrap" type="submit"><i class="bi bi-x-circle"></i> Rechazada</button>
+            </form>
+        {% else %}
+            <span class="me-auto">
+                {% if cot.estado == 'aceptada' %}<i class="bi bi-check-circle text-success"></i> Aceptada el {{ cot.fecha_estado|date:"d/m/Y" }}. Es una venta: abajo está su cuenta corriente.
+                {% else %}<i class="bi bi-x-circle text-secondary"></i> Rechazada el {{ cot.fecha_estado|date:"d/m/Y" }}{% if cot.motivo_rechazo %} — motivo: {{ cot.motivo_rechazo }}{% endif %}.{% endif %}
+            </span>
+            <form method="post" action="{% url 'cotizador:cambiar_estado' cot.pk %}">{% csrf_token %}
+                <input type="hidden" name="estado" value="pendiente">
+                <button class="btn btn-sm btn-outline-secondary" type="submit">Volver a pendiente</button>
+            </form>
+            {% if cot.estado == 'rechazada' %}
+            <form method="post" action="{% url 'cotizador:cambiar_estado' cot.pk %}">{% csrf_token %}
+                <input type="hidden" name="estado" value="aceptada">
+                <button class="btn btn-sm btn-outline-success" type="submit">Marcar aceptada</button>
+            </form>
+            {% endif %}
+        {% endif %}
+    </div>
+</div>
+
+{% if cot.estado == 'aceptada' %}
+<div class="card shadow-sm mb-3 border-success">
+    <div class="card-header d-flex flex-wrap gap-3 align-items-center">
+        <span class="me-auto">Cuenta corriente de la venta</span>
+        <span class="fw-normal">Total: <b>$ {{ cargos|pesos }}</b></span>
+        <span class="fw-normal">Pagado: <b class="text-success">$ {{ pagado|pesos }}</b></span>
+        <span class="fw-normal">Saldo: <b class="{% if saldo > 0 %}text-danger{% else %}text-success{% endif %}">$ {{ saldo|pesos }}</b></span>
+    </div>
+    <div class="card-body pb-0">
+        {% if falta_sena > 0 %}<div class="alert alert-warning py-2">Falta la seña: el {{ cot.porcentaje_sena }}% son $ {{ sena|pesos }} (faltan $ {{ falta_sena|pesos }}). Sin seña el vehículo no queda reservado.</div>{% endif %}
+        {% if pago_urgente %}<div class="alert alert-danger py-2">El viaje sale el {{ cot.salida|date:"d/m/Y H:i" }} y todavía debe $ {{ saldo|pesos }}. Según las condiciones, tiene que estar pago 72 hs hábiles antes.</div>{% endif %}
+        {% if saldo <= 0 %}<div class="alert alert-success py-2">Venta cobrada por completo.</div>{% endif %}
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+            <thead class="table-light"><tr><th>Fecha</th><th>Concepto</th><th>Medio / comprobante</th><th class="num">Cargo</th><th class="num">Pago</th><th class="num">Saldo</th><th></th></tr></thead>
+            <tbody>
+            {% for m, s in movimientos %}
+                <tr>
+                    <td>{{ m.fecha|date:"d/m/Y" }}</td>
+                    <td>{{ m.concepto }}{% if m.automatico %} <i class="bi bi-arrow-repeat text-muted" title="Se actualiza solo si cambia el precio de la cotización"></i>{% endif %}</td>
+                    <td class="small">{{ m.get_medio_display }}{% if m.referencia %} · {{ m.referencia }}{% endif %}</td>
+                    <td class="num">{% if m.tipo == 'cargo' %}{{ m.importe|pesos }}{% endif %}</td>
+                    <td class="num text-success">{% if m.tipo == 'pago' %}{{ m.importe|pesos }}{% endif %}</td>
+                    <td class="num">{{ s|pesos }}</td>
+                    <td class="text-end">{% if not m.automatico %}
+                        <form method="post" action="{% url 'cotizador:movimiento_eliminar' m.pk %}" onsubmit="return confirm('¿Borrar este movimiento?');">{% csrf_token %}
+                            <button class="btn btn-sm btn-link text-danger p-0" type="submit" title="Borrar"><i class="bi bi-trash"></i></button>
+                        </form>{% endif %}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="card-body border-top bg-light">
+        <div class="fw-semibold mb-2">Cargar un pago, seña o un cargo extra</div>
+        <form method="post" action="{% url 'cotizador:movimiento_nuevo' cot.pk %}" class="row g-2 align-items-end">
+            {% csrf_token %}
+            {% include '_campo.html' with campo=mov_form.fecha clase='col-6 col-md-2' %}
+            {% include '_campo.html' with campo=mov_form.tipo clase='col-6 col-md-2' %}
+            {% include '_campo.html' with campo=mov_form.concepto clase='col-12 col-md-3' %}
+            {% include '_campo.html' with campo=mov_form.importe clase='col-6 col-md-2' %}
+            {% include '_campo.html' with campo=mov_form.medio clase='col-6 col-md-1' %}
+            {% include '_campo.html' with campo=mov_form.referencia clase='col-8 col-md-2' %}
+            <div class="col-12 mb-2"><button class="btn btn-success" type="submit"><i class="bi bi-plus-lg"></i> Cargar</button>
+                <span class="small text-muted ms-2">Un "cargo" suma a lo que debe (ej.: km extra, horas de espera). Para un descuento, cargalo como pago con medio "Otro".</span></div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
 <div class="row g-3">
     <div class="col-lg-6">
         <div class="card shadow-sm mb-3">
@@ -21,7 +107,8 @@
                     <b>{{ cot.cantidad_vehiculos|stringformat:"02d" }} {{ cot.descripcion_vehiculo }}</b>
                     <div class="text-end">
                         <div>TOTAL: $ {{ cot.tarifa_neta|pesos }}</div>
-                        {% if r.final %}<div>+IVA: $ {{ r.final.iva|pesos }}</div><div><b>TOTAL: $ {{ r.final.bruto|pesos }}</b></div>{% endif %}
+                        <div>+IVA: $ {{ cot.importe_iva|pesos }}</div>
+                        <div><b>TOTAL: $ {{ cot.total_con_iva|pesos }}</b></div>
                     </div>
                 </div>
                 <b>Incluye:</b><ul>{% for l in cot.incluye.splitlines %}{% if l.strip %}<li>{{ l }}</li>{% endif %}{% endfor %}</ul>
@@ -37,16 +124,18 @@
                     <div class="col-6">Días / noches: <b>{{ cot.dias }} / {{ cot.noches }}</b></div>
                     <div class="col-6">Choferes: <b>{{ cot.choferes }}</b> · viáticos c/u: <b>{{ cot.viaticos_por_chofer }}</b></div>
                     <div class="col-6">Vehículo: <b>{{ cot.cantidad_vehiculos }} × {{ cot.vehiculo }}</b></div>
-                    <div class="col-6">Contacto: {{ cot.contacto|default:"—" }}</div>
+                    <div class="col-6">Teléfono: {{ cot.cliente.telefono|default:"—" }}</div>
                 </div>
                 {% if cot.notas_internas %}<hr><b>Notas internas:</b> {{ cot.notas_internas|linebreaksbr }}{% endif %}
                 <hr class="my-2"><span class="text-muted">Calculado con los parámetros vigentes el {{ cot.modificado|date:"d/m/Y H:i" }}{% if cot.creado_por %} · cargó {{ cot.creado_por.get_full_name|default:cot.creado_por.username }}{% endif %}.</span>
             </div>
         </div>
+        {% if cot.estado != 'aceptada' %}
         <form method="post" action="{% url 'cotizador:eliminar' cot.pk %}" onsubmit="return confirm('¿Eliminar la cotización {{ cot.numero }}? No se puede deshacer.');">
             {% csrf_token %}
             <button class="btn btn-sm btn-outline-danger" type="submit"><i class="bi bi-trash"></i> Eliminar cotización</button>
         </form>
+        {% endif %}
     </div>
     <div class="col-lg-6">
         {% include 'cotizador/_resultado.html' %}
