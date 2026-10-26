@@ -34,6 +34,17 @@ def _repetir_parrafo(xml, marca, renglones):
     return xml.replace(parrafo, copias, 1)
 
 
+def _repetir_vehiculos(xml, lineas):
+    """El renglón "01 BUS Piso Elevado 50 pasajeros" del recuadro se repite por cada tipo de vehículo."""
+    m = re.search(r'<w:p[ >](?:(?!<w:p[ >]).)*?\{\{CANTIDAD\}\}.*?</w:p>', xml, re.S)
+    if not m:
+        return xml
+    parrafo = m.group(0)
+    copias = ''.join(parrafo.replace('{{CANTIDAD}}', f'{l.cantidad:02d}').replace('{{VEHICULO}}', escape(l.descripcion))
+                     for l in lineas)
+    return xml.replace(parrafo, copias, 1)
+
+
 def generar(cot):
     salida = timezone.localtime(cot.salida)
     regreso = timezone.localtime(cot.regreso)
@@ -52,8 +63,6 @@ def generar(cot):
         'SALIDA': texto_salida,
         'ITINERARIO': cot.itinerario,
         'REGRESO': regreso.strftime('%d/%m/%Y %H:%M HS.'),
-        'CANTIDAD': f'{cot.cantidad_vehiculos:02d}',
-        'VEHICULO': cot.descripcion_vehiculo,
         'NETO': pesos(neto),
         'IVA_PORC': porcentaje(porc_iva),
         'IVA': pesos(bruto - neto),
@@ -65,6 +74,7 @@ def generar(cot):
     with zipfile.ZipFile(PLANTILLA) as z:
         archivos = {n: z.read(n) for n in z.namelist()}
     xml = archivos['word/document.xml'].decode('utf8')
+    xml = _repetir_vehiculos(xml, list(cot.lineas.all()))
     xml = _repetir_parrafo(xml, '{{INCLUYE}}', [r.strip() for r in cot.incluye.splitlines() if r.strip()])
     xml = _repetir_parrafo(xml, '{{NO_INCLUYE}}', [r.strip() for r in cot.no_incluye.splitlines() if r.strip()])
     for clave, valor in valores.items():

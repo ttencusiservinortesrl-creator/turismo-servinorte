@@ -1,6 +1,7 @@
 from datetime import timedelta
 from decimal import Decimal
 
+from django import forms
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
 from django.db import transaction
@@ -8,18 +9,20 @@ from django.db.models import Count, Q
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_POST
 
-from . import calculo, excel, rutas, word
-from .forms import ClienteForm, CotizacionForm, MovimientoForm, ParametrosForm, TipoVehiculoForm
-from .models import Cliente, Cotizacion, Movimiento, Parametros, TipoVehiculo
+from . import calculo, estadisticas as estadisticas_calculo, excel, recibo, rutas, word
+from .forms import (ClienteForm, CotizacionForm, LineaVehiculoForm, MovimientoForm, ParametrosForm,
+                    TipoVehiculoForm, lineas_validas)
+from .models import Cliente, Cotizacion, LineaVehiculo, Movimiento, Parametros, TipoVehiculo
 
 
 @login_required
 def lista(request):
     q = request.GET.get('q', '').strip()
     estado = request.GET.get('estado', '')
-    cotizaciones = Cotizacion.objects.select_related('vehiculo', 'cliente')
+    cotizaciones = Cotizacion.objects.select_related('cliente').prefetch_related('lineas__vehiculo')
     if q:
         filtro = Q(cliente__nombre__icontains=q) | Q(itinerario__icontains=q) | Q(paradas__icontains=q)
         if q.isdigit():
@@ -33,15 +36,31 @@ def lista(request):
         'estados': [(k, v, conteo.get(k, 0)) for k, v in Cotizacion.ESTADOS]})
 
 
+def _formset_lineas(data=None, instance=None, inicial=None):
+    """Formulario de vehículos de la cotización. `inicial`: lista de líneas para una cotización nueva."""
+    extra = max(len(inicial) - 1, 0) if inicial else 0
+    clase = forms.inlineformset_factory(Cotizacion, LineaVehiculo, form=LineaVehiculoForm, extra=extra,
+                                        min_num=1, validate_min=True, can_delete=True)
+    return clase(data, instance=instance or Cotizacion(), prefix='lineas', initial=inicial)
+
+
 @transaction.atomic
-def _guardar(request, form, p):
+def _guardar(request, form, formset, p):
     cot = form.save(commit=False)
-    resultado = calculo.calcular(p, {**form.cleaned_data})
+    resultado = calculo.calcular(p, {**form.cleaned_data, 'lineas': lineas_validas(formset)})
     cot.costo_total = resultado['costo']
     cot.detalle = calculo.para_guardar(resultado, p)
     if not cot.creado_por_id:
         cot.creado_por = request.user
     cot.save()
+    formset.instance = cot
+    lineas = formset.save(commit=False)
+    for linea in formset.deleted_objects:
+        linea.delete()
+    for orden, linea in enumerate(lineas):
+        linea.cotizacion = cot
+        linea.orden = orden
+        linea.save()
     cot.actualizar_cargo_automatico()
     return cot
 
@@ -51,8 +70,9 @@ def nueva(request):
     p = Parametros.actuales()
     if request.method == 'POST':
         form = CotizacionForm(request.POST)
-        if form.is_valid():
-            cot = _guardar(request, form, p)
+        formset = _formset_lineas(request.POST)
+        if form.is_valid() and formset.is_valid():
+            cot = _guardar(request, form, formset, p)
             messages.success(request, f'Cotización {cot.numero} guardada.')
             return redirect('cotizador:detalle', cot.pk)
     else:
@@ -65,17 +85,19 @@ def nueva(request):
         base = Cotizacion.objects.filter(pk=request.GET.get('copiar')).first() if request.GET.get('copiar') else None
         if base:
             copia = {f: getattr(base, f) for f in CotizacionForm.Meta.fields if f not in ('numero', 'fecha')}
-            copia['vehiculo'] = base.vehiculo_id
             copia['cliente'] = base.cliente_id
             copia['salida'] = timezone.localtime(base.salida)
             copia['regreso'] = timezone.localtime(base.regreso)
             inicial.update(copia)
+            lineas = [{'vehiculo': l.vehiculo_id, 'cantidad': l.cantidad, 'choferes': l.choferes,
+                       'descripcion': l.descripcion} for l in base.lineas.all()]
         else:
             vehiculo = TipoVehiculo.objects.filter(activo=True).first()
-            if vehiculo:
-                inicial.update(vehiculo=vehiculo.pk, descripcion_vehiculo=vehiculo.descripcion_word)
+            lineas = [{'vehiculo': vehiculo.pk, 'cantidad': 1, 'choferes': 1,
+                       'descripcion': vehiculo.descripcion_word}] if vehiculo else None
         form = CotizacionForm(initial=inicial)
-    return render(request, 'cotizador/form.html', {'form': form, 'p': p, 'vehiculos': _vehiculos_js()})
+        formset = _formset_lineas(inicial=lineas)
+    return render(request, 'cotizador/form.html', {'form': form, 'formset': formset, 'p': p, 'vehiculos': _vehiculos_js()})
 
 
 @login_required
@@ -84,14 +106,17 @@ def editar(request, pk):
     p = Parametros.actuales()
     if request.method == 'POST':
         form = CotizacionForm(request.POST, instance=cot)
-        if form.is_valid():
-            _guardar(request, form, p)
+        formset = _formset_lineas(request.POST, instance=cot)
+        if form.is_valid() and formset.is_valid():
+            _guardar(request, form, formset, p)
             messages.success(request, f'Cotización {cot.numero} actualizada con los parámetros de hoy.')
             return redirect('cotizador:detalle', cot.pk)
     else:
         form = CotizacionForm(instance=cot, initial={
             'salida': timezone.localtime(cot.salida), 'regreso': timezone.localtime(cot.regreso)})
-    return render(request, 'cotizador/form.html', {'form': form, 'p': p, 'cot': cot, 'vehiculos': _vehiculos_js()})
+        formset = _formset_lineas(instance=cot)
+    return render(request, 'cotizador/form.html', {
+        'form': form, 'formset': formset, 'p': p, 'cot': cot, 'vehiculos': _vehiculos_js()})
 
 
 def _vehiculos_js():
@@ -111,7 +136,7 @@ def _con_saldo_acumulado(movimientos):
 
 @login_required
 def detalle(request, pk):
-    cot = get_object_or_404(Cotizacion.objects.select_related('vehiculo', 'creado_por', 'cliente'), pk=pk)
+    cot = get_object_or_404(Cotizacion.objects.select_related('creado_por', 'cliente').prefetch_related('lineas__vehiculo'), pk=pk)
     contexto = {'cot': cot, 'r': cot.detalle}
     if cot.estado == Cotizacion.ACEPTADA:
         pagado = cot.total_pagos()
@@ -171,6 +196,16 @@ def movimiento_nuevo(request, pk):
 
 
 @login_required
+def descargar_recibo(request, pk):
+    mov = get_object_or_404(Movimiento.objects.select_related('cotizacion__cliente'), pk=pk, tipo=Movimiento.PAGO)
+    respuesta = HttpResponse(
+        recibo.generar(mov),
+        content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+    respuesta['Content-Disposition'] = f'attachment; filename="{recibo.nombre_archivo(mov)}"'
+    return respuesta
+
+
+@login_required
 @require_POST
 def movimiento_eliminar(request, pk):
     mov = get_object_or_404(Movimiento, pk=pk, automatico=False)
@@ -208,7 +243,7 @@ def ventas(request):
     """Cotizaciones aceptadas con lo cobrado y lo que falta cobrar."""
     filtro = request.GET.get('filtro', 'saldo')
     lista_ventas = []
-    aceptadas = Cotizacion.objects.filter(estado=Cotizacion.ACEPTADA).select_related('cliente', 'vehiculo')
+    aceptadas = Cotizacion.objects.filter(estado=Cotizacion.ACEPTADA).select_related('cliente').prefetch_related('lineas__vehiculo')
     for cot in aceptadas.order_by('salida'):
         saldo = cot.saldo()
         if filtro == 'saldo' and saldo <= 0:
@@ -229,6 +264,15 @@ def cuentas_excel(request):
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     respuesta['Content-Disposition'] = f'attachment; filename="{nombre}_{timezone.localdate():%d-%m-%Y}.xlsx"'
     return respuesta
+
+
+@login_required
+def estadisticas(request):
+    hoy = timezone.localdate()
+    hasta = parse_date(request.GET.get('hasta', '')) or hoy
+    desde = parse_date(request.GET.get('desde', '')) or hasta.replace(year=hasta.year - 1, day=1)
+    return render(request, 'cotizador/estadisticas.html', {
+        'desde': desde, 'hasta': hasta, **estadisticas_calculo.calcular(desde, hasta)})
 
 
 @login_required
@@ -264,7 +308,7 @@ def cliente(request, pk):
     ).select_related('cotizacion').order_by('fecha', 'id')
     filas = _con_saldo_acumulado(movimientos)
     return render(request, 'cotizador/cliente.html', {
-        'cliente': cliente_obj, 'cotizaciones': cliente_obj.cotizaciones.select_related('vehiculo'),
+        'cliente': cliente_obj, 'cotizaciones': cliente_obj.cotizaciones.prefetch_related('lineas__vehiculo'),
         'movimientos': filas, 'saldo': filas[-1][1] if filas else Decimal(0)})
 
 
@@ -286,7 +330,9 @@ def calcular(request):
     """Vista previa del cálculo mientras se completa el formulario."""
     form = CotizacionForm(request.POST)
     form.is_valid()
-    resultado = calculo.calcular(Parametros.actuales(), form.cleaned_data)
+    formset = _formset_lineas(request.POST)
+    formset.is_valid()
+    resultado = calculo.calcular(Parametros.actuales(), {**form.cleaned_data, 'lineas': lineas_validas(formset)})
     return render(request, 'cotizador/_resultado.html', {'r': resultado, 'usar': True})
 
 

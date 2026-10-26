@@ -1,0 +1,131 @@
+{% extends 'base.html' %}
+{% load formato %}
+{% block title %}Estadísticas{% endblock %}
+{% block content %}
+<div class="encabezado">
+    <h1><span class="icono"><i class="bi bi-bar-chart-line"></i></span> Estadísticas</h1>
+    <form class="d-flex flex-wrap gap-2 align-items-end" method="get">
+        <div><label class="small text-muted" for="desde">Desde</label><input class="form-control" type="date" id="desde" name="desde" value="{{ desde|date:'Y-m-d' }}"></div>
+        <div><label class="small text-muted" for="hasta">Hasta</label><input class="form-control" type="date" id="hasta" name="hasta" value="{{ hasta|date:'Y-m-d' }}"></div>
+        <button class="btn btn-primary" type="submit"><i class="bi bi-funnel"></i> Ver</button>
+    </form>
+</div>
+<p class="bajada">Cotizaciones con fecha entre el {{ desde|date:"d/m/Y" }} y el {{ hasta|date:"d/m/Y" }}. Los importes son sin IVA.</p>
+
+<div class="row g-3 mb-3">
+    <div class="col-6 col-lg-3"><div class="tarjeta-numero">
+        <div class="etiqueta">Cotizaciones</div><div class="valor">{{ resumen.total }}</div>
+        <div class="nota">{{ resumen.aceptadas }} aceptadas · {{ resumen.rechazadas }} rechazadas · {{ resumen.pendientes }} pendientes</div>
+    </div></div>
+    <div class="col-6 col-lg-3"><div class="tarjeta-numero">
+        <div class="etiqueta">Se aceptan</div><div class="valor">{{ resumen.tasa_aceptacion|pesos:1 }}%</div>
+        <div class="nota">de las que el cliente respondió</div>
+    </div></div>
+    <div class="col-6 col-lg-3"><div class="tarjeta-numero">
+        <div class="etiqueta">Vendido</div><div class="valor">$ {{ resumen.vendido|pesos }}</div>
+        <div class="nota">de $ {{ resumen.cotizado|pesos }} cotizados · promedio $ {{ resumen.promedio|pesos }} por viaje</div>
+    </div></div>
+    <div class="col-6 col-lg-3"><div class="tarjeta-numero">
+        <div class="etiqueta">Ganancia estimada</div><div class="valor text-success">$ {{ resumen.ganancia|pesos }}</div>
+        <div class="nota">{{ resumen.rentabilidad|pesos:1 }}% sobre lo vendido</div>
+    </div></div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-7">
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between"><span>Por mes</span>
+                <span class="small fw-normal text-muted"><span class="leyenda-punto" style="background: var(--azul-500)"></span>cotizadas <span class="leyenda-punto ms-2" style="background:#2e9e6a"></span>aceptadas</span></div>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                    <thead><tr><th>Mes</th><th style="width: 45%"></th><th class="num">Cotiz.</th><th class="num">Acept.</th><th class="num">Vendido</th></tr></thead>
+                    <tbody>
+                    {% for m in meses %}
+                        <tr>
+                            <td class="text-nowrap">{{ m.mes }}</td>
+                            <td><div class="barra-fondo"><div class="barra-relleno" style="width: {{ m.barra }}%"></div><div class="barra-relleno aceptadas" style="width: {{ m.barra_aceptadas }}%"></div></div></td>
+                            <td class="num">{{ m.cotizadas }}</td>
+                            <td class="num">{{ m.aceptadas }}</td>
+                            <td class="num">$ {{ m.vendido|pesos }}</td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="5" class="text-center text-muted py-3">No hay cotizaciones en esas fechas.</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header">Destinos más pedidos</div>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                    <thead><tr><th>Destino</th><th style="width: 30%"></th><th class="num">Pedidos</th><th class="num">Aceptados</th><th class="num">Se acepta</th><th class="num">Vendido</th></tr></thead>
+                    <tbody>
+                    {% for d in destinos %}
+                        <tr>
+                            <td>{{ d.destino }}</td>
+                            <td><div class="barra-fondo"><div class="barra-relleno" style="width: {{ d.barra }}%"></div></div></td>
+                            <td class="num">{{ d.pedidos }}</td>
+                            <td class="num">{{ d.aceptados }}</td>
+                            <td class="num">{{ d.tasa|pesos:0 }}%</td>
+                            <td class="num">$ {{ d.vendido|pesos }}</td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="6" class="text-center text-muted py-3">Sin datos.</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="card mb-3">
+            <div class="card-header">Motivos de rechazo</div>
+            <div class="card-body">
+                {% for m in motivos %}
+                    <div class="mb-2">
+                        <div class="d-flex justify-content-between small"><span>{{ m.motivo }}</span><span class="text-muted">{{ m.cantidad }} ({{ m.porcentaje|pesos:0 }}%)</span></div>
+                        <div class="barra-fondo"><div class="barra-relleno" style="width: {{ m.barra }}%; background: #c2546b"></div></div>
+                    </div>
+                {% empty %}
+                    <div class="text-muted small">No hay cotizaciones rechazadas en esas fechas.</div>
+                {% endfor %}
+                <div class="form-text mt-2">El motivo es el que se escribe al tocar "Rechazada" en la cotización.</div>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header">Clientes que más compraron</div>
+            <div class="card-body">
+                {% for c in clientes %}
+                    <div class="mb-2">
+                        <div class="d-flex justify-content-between small">
+                            <a href="{% url 'cotizador:cliente' c.cliente.pk %}">{{ c.cliente.nombre }}</a>
+                            <span class="text-muted">$ {{ c.vendido|pesos }} · {{ c.aceptadas }}/{{ c.cotizaciones }}</span>
+                        </div>
+                        <div class="barra-fondo"><div class="barra-relleno" style="width: {{ c.barra }}%"></div></div>
+                    </div>
+                {% empty %}
+                    <div class="text-muted small">Sin datos.</div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header">Vehículos en los viajes vendidos</div>
+            <div class="card-body">
+                {% for v in vehiculos %}
+                    <div class="mb-2">
+                        <div class="d-flex justify-content-between small"><span>{{ v.vehiculo }}</span><span class="text-muted">{{ v.cantidad }}</span></div>
+                        <div class="barra-fondo"><div class="barra-relleno" style="width: {{ v.barra }}%"></div></div>
+                    </div>
+                {% empty %}
+                    <div class="text-muted small">Todavía no hay viajes aceptados en esas fechas.</div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

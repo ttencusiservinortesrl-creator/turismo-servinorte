@@ -62,14 +62,17 @@
             </div>
 
             <div class="card shadow-sm mb-3">
-                <div class="card-header">Vehículo, personal y gastos</div>
+                <div class="card-header">Vehículos, personal y gastos</div>
                 <div class="card-body row g-2">
-                    {% include '_campo.html' with campo=form.vehiculo clase='col-md-5' %}
-                    {% include '_campo.html' with campo=form.cantidad_vehiculos clase='col-6 col-md-3' %}
-                    {% include '_campo.html' with campo=form.descripcion_vehiculo clase='col-12 col-md-4' %}
-                    {% include '_campo.html' with campo=form.choferes clase='col-4' %}
-                    {% include '_campo.html' with campo=form.viaticos_por_chofer clase='col-4' %}
-                    {% include '_campo.html' with campo=form.habitaciones clase='col-4' %}
+                    {{ formset.management_form }}
+                    {% for e in formset.non_form_errors %}<div class="col-12 text-danger small">{{ e }}</div>{% endfor %}
+                    <div class="col-12" id="lineas">
+                        {% for f in formset %}{% include 'cotizador/_linea_vehiculo.html' %}{% endfor %}
+                    </div>
+                    <template id="linea-vacia">{% with f=formset.empty_form %}{% include 'cotizador/_linea_vehiculo.html' %}{% endwith %}</template>
+                    <div class="col-12 mb-2"><button type="button" class="btn btn-sm btn-outline-primary" id="agregar-linea"><i class="bi bi-plus-lg"></i> Agregar otro tipo de vehículo</button></div>
+                    {% include '_campo.html' with campo=form.viaticos_por_chofer clase='col-6' %}
+                    {% include '_campo.html' with campo=form.habitaciones clase='col-6' %}
                     <div class="col-12 mb-1">
                         <span class="small text-muted me-2">Incluir en el costo:</span>
                         {% include '_campo.html' with campo=form.incluye_hotel clase='d-inline-block' %}
@@ -152,9 +155,35 @@
         $('nuevo_cliente').focus();
     });
 
-    $('vehiculo').addEventListener('change', () => {
-        const v = vehiculos[$('vehiculo').value];
-        if (v) $('descripcion_vehiculo').value = v.descripcion;
+    // Vehículos: al elegir el tipo se completa el texto del Word; se pueden agregar y quitar líneas.
+    const lineas = document.getElementById('lineas');
+    const totalLineas = document.getElementById('id_lineas-TOTAL_FORMS');
+    lineas.addEventListener('change', (e) => {
+        if (!e.target.name || !e.target.name.endsWith('-vehiculo')) return;
+        const v = vehiculos[e.target.value];
+        const desc = e.target.closest('.linea').querySelector('[name$="-descripcion"]');
+        if (v && desc) desc.value = v.descripcion;
+    });
+    lineas.addEventListener('click', (e) => {
+        const b = e.target.closest('.quitar-linea');
+        if (!b) return;
+        const fila = b.closest('.linea');
+        const visibles = [...lineas.querySelectorAll('.linea')].filter(x => !x.classList.contains('d-none'));
+        if (visibles.length <= 1) { alert('Tiene que quedar al menos un vehículo.'); return; }
+        fila.querySelector('[name$="-DELETE"]').checked = true;
+        fila.classList.add('d-none');
+        recalcular();
+    });
+    document.getElementById('agregar-linea').addEventListener('click', () => {
+        const n = parseInt(totalLineas.value, 10);
+        const html = document.getElementById('linea-vacia').innerHTML.replace(/__prefix__/g, n);
+        lineas.insertAdjacentHTML('beforeend', html);
+        totalLineas.value = n + 1;
+        const nueva = lineas.lastElementChild;
+        const select = nueva.querySelector('[name$="-vehiculo"]');
+        const v = vehiculos[select.value];
+        if (v) nueva.querySelector('[name$="-descripcion"]').value = v.descripcion;
+        recalcular();
     });
 
     // Días, noches y aclaración de la salida según las fechas.

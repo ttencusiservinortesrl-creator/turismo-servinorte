@@ -179,3 +179,16 @@ a:hover { text-decoration: underline; }
 .pantalla-ingreso img { max-width: 230px; height: auto; }
 
 .pie { color: var(--texto-suave); font-size: .8rem; text-align: center; padding: 1.5rem 0 1rem; }
+
+/* ---- Estadísticas ---- */
+.tarjeta-numero { background: #fff; border: 1px solid var(--borde); border-radius: var(--radio); box-shadow: var(--sombra); padding: 1rem 1.1rem; height: 100%; }
+.tarjeta-numero .etiqueta { font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; color: var(--texto-suave); }
+.tarjeta-numero .valor { font-size: 1.6rem; font-weight: 700; color: var(--azul-900); line-height: 1.2; }
+.tarjeta-numero .nota { font-size: .8rem; color: var(--texto-suave); }
+.barra-fondo { background: var(--azul-50); border-radius: 6px; height: 10px; overflow: hidden; position: relative; }
+.barra-relleno { background: var(--azul-500); height: 100%; border-radius: 6px; }
+.barra-relleno.aceptadas { background: #2e9e6a; position: absolute; top: 0; left: 0; }
+.leyenda-punto { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: middle; }
+.card-header.d-flex { justify-content: flex-start !important; align-items: center; }
+.card-header.d-flex::before { flex-shrink: 0; }
+.card-header.d-flex > :last-child { margin-left: auto; }

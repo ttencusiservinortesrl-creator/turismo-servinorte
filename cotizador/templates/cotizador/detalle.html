@@ -64,12 +64,12 @@
                 <tr>
                     <td>{{ m.fecha|date:"d/m/Y" }}</td>
                     <td>{{ m.concepto }}{% if m.automatico %} <i class="bi bi-arrow-repeat text-muted" title="Se actualiza solo si cambia el precio de la cotización"></i>{% endif %}</td>
-                    <td class="small">{{ m.get_medio_display }}{% if m.referencia %} · {{ m.referencia }}{% endif %}</td>
+                    <td class="small">{% if m.numero_recibo %}Recibo {{ m.numero_recibo }} · {% endif %}{{ m.get_medio_display }}{% if m.referencia %} · {{ m.referencia }}{% endif %}</td>
                     <td class="num">{% if m.tipo == 'cargo' %}{{ m.importe|pesos }}{% endif %}</td>
                     <td class="num text-success">{% if m.tipo == 'pago' %}{{ m.importe|pesos }}{% endif %}</td>
                     <td class="num">{{ s|pesos }}</td>
-                    <td class="text-end">{% if not m.automatico %}
-                        <form method="post" action="{% url 'cotizador:movimiento_eliminar' m.pk %}" onsubmit="return confirm('¿Borrar este movimiento?');">{% csrf_token %}
+                    <td class="text-end text-nowrap">{% if m.tipo == 'pago' %}<a class="btn btn-sm btn-outline-primary py-0 me-1" href="{% url 'cotizador:recibo' m.pk %}" title="Descargar recibo N° {{ m.numero_recibo }}"><i class="bi bi-receipt"></i> Recibo</a>{% endif %}{% if not m.automatico %}
+                        <form class="d-inline" method="post" action="{% url 'cotizador:movimiento_eliminar' m.pk %}" onsubmit="return confirm('¿Borrar este movimiento?');">{% csrf_token %}
                             <button class="btn btn-sm btn-link text-danger p-0" type="submit" title="Borrar"><i class="bi bi-trash"></i></button>
                         </form>{% endif %}</td>
                 </tr>
@@ -104,7 +104,7 @@
                 <p class="mb-1"><b>Itinerario:</b> {{ cot.itinerario }}</p>
                 <p class="mb-3"><b>Regreso:</b> {{ cot.regreso|date:"d/m/Y H:i" }} HS.</p>
                 <div class="recuadro-word p-3 d-flex justify-content-between mb-3">
-                    <b>{{ cot.cantidad_vehiculos|stringformat:"02d" }} {{ cot.descripcion_vehiculo }}</b>
+                    <div>{% for l in cot.lineas.all %}<div><b>{{ l.cantidad|stringformat:"02d" }} {{ l.descripcion }}</b></div>{% endfor %}</div>
                     <div class="text-end">
                         <div>TOTAL: $ {{ cot.tarifa_neta|pesos }}</div>
                         <div>+IVA: $ {{ cot.importe_iva|pesos }}</div>
@@ -122,8 +122,8 @@
                     <div class="col-6">Km en servicio: <b>{{ cot.km_servicio|pesos }}</b>{% if cot.km_mapa %} <span class="text-muted">(mapa: {{ cot.km_mapa|pesos }})</span>{% endif %}</div>
                     <div class="col-6">Km vacíos: <b>{{ cot.km_vacios|pesos }}</b></div>
                     <div class="col-6">Días / noches: <b>{{ cot.dias }} / {{ cot.noches }}</b></div>
-                    <div class="col-6">Choferes: <b>{{ cot.choferes }}</b> · viáticos c/u: <b>{{ cot.viaticos_por_chofer }}</b></div>
-                    <div class="col-6">Vehículo: <b>{{ cot.cantidad_vehiculos }} × {{ cot.vehiculo }}</b></div>
+                    <div class="col-6">Viáticos por chofer: <b>{{ cot.viaticos_por_chofer }}</b></div>
+                    <div class="col-12">Vehículos: {% for l in cot.lineas.all %}<b>{{ l.cantidad }} × {{ l.vehiculo }}</b> ({{ l.choferes }} chofer{{ l.choferes|pluralize:"es" }} c/u){% if not forloop.last %} · {% endif %}{% endfor %}</div>
                     <div class="col-6">Teléfono: {{ cot.cliente.telefono|default:"—" }}</div>
                 </div>
                 {% if cot.notas_internas %}<hr><b>Notas internas:</b> {{ cot.notas_internas|linebreaksbr }}{% endif %}

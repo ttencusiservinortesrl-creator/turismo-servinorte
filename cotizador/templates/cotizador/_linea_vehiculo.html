@@ -1,0 +1,10 @@
+<div class="linea row g-2 align-items-end mb-2 pb-2 border-bottom{% if f.DELETE.value %} d-none{% endif %}">
+    {% for h in f.hidden_fields %}{{ h }}{% endfor %}
+    <div class="d-none">{{ f.DELETE }}</div>
+    {% include '_campo.html' with campo=f.vehiculo clase='col-12 col-md-4' %}
+    {% include '_campo.html' with campo=f.cantidad clase='col-4 col-md-2' %}
+    {% include '_campo.html' with campo=f.choferes clase='col-4 col-md-2' %}
+    {% include '_campo.html' with campo=f.descripcion clase='col-12 col-md-3 order-last order-md-0' %}
+    <div class="col-4 col-md-1 mb-2 text-end"><button type="button" class="btn btn-outline-secondary quitar-linea" title="Quitar este vehículo"><i class="bi bi-trash"></i></button></div>
+    {% for e in f.non_field_errors %}<div class="col-12 text-danger small">{{ e }}</div>{% endfor %}
+</div>

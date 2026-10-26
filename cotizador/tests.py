@@ -70,6 +70,22 @@ class CalculoTest(TestCase):
                                inflacion_mensual=Decimal(2))
         self.assertEqual(calculo.calcular(p, apagado)['costo'], hoy['costo'])
 
+    def test_varios_vehiculos(self):
+        p = Parametros.actuales()
+        bus = TipoVehiculo.objects.get(nombre='Piso elevado')
+        minibus = TipoVehiculo.objects.get(nombre='Minibus')
+        minibus.rendimiento_km_litro = Decimal(6)
+        minibus.save()
+        solo_bus = calculo.calcular(p, datos_cot302())
+        r = calculo.calcular(p, datos_cot302(lineas=[{'vehiculo': bus, 'cantidad': 1, 'choferes': 2},
+                                                     {'vehiculo': minibus, 'cantidad': 1, 'choferes': 1}]))
+        self.assertEqual(r['capacidad'], 48 + 22)
+        combustible = {i['nombre']: i['importe'] for i in r['items']}['Combustible']
+        # bus 1700 km / 3 km/l + minibus 1700 km / 6 km/l, a $2500
+        self.assertEqual(combustible, Decimal('1416666.67') + Decimal('708333.33'))
+        self.assertGreater(r['costo'], solo_bus['costo'])
+        self.assertLess(r['costo'], solo_bus['costo'] * 2)
+
     def test_sin_km_no_divide_por_cero(self):
         r = calculo.calcular(Parametros.actuales(), datos_cot302(km_servicio=0, km_vacios=0))
         self.assertEqual(r['costo_km'], 0)
@@ -88,8 +104,10 @@ class BaseVistas(TestCase):
             'itinerario': 'Salta, Salta – Orán, Salta – Salta, Salta. Con paradas intermedias.',
             'km_servicio': '540', 'km_vacios': '60', 'km_mapa': '540',
             'salida': '2026-11-09T07:00', 'regreso': '2026-11-09T19:30', 'texto_salida': 'desde Salta. Ida y regreso en el día.',
-            'dias': '1', 'noches': '0', 'vehiculo': self.vehiculo.pk, 'cantidad_vehiculos': '1',
-            'descripcion_vehiculo': 'BUS  Piso Elevado 50 pasajeros', 'choferes': '1', 'viaticos_por_chofer': '2',
+            'dias': '1', 'noches': '0', 'viaticos_por_chofer': '2',
+            'lineas-TOTAL_FORMS': '1', 'lineas-INITIAL_FORMS': '0', 'lineas-MIN_NUM_FORMS': '1', 'lineas-MAX_NUM_FORMS': '1000',
+            'lineas-0-vehiculo': self.vehiculo.pk, 'lineas-0-cantidad': '1', 'lineas-0-choferes': '1',
+            'lineas-0-descripcion': 'BUS  Piso Elevado 50 pasajeros',
             'habitaciones': '1', 'incluye_estacionamiento': 'on', 'peaje': '0', 'otros_gastos': '0',
             'inflacion_mensual': '1.70', 'tarifa_neta': '1700000', 'incluye': 'Traslado ida y regreso.\nViáticos de personal.',
             'no_incluye': 'Gastos no especificados & extras.', 'notas_internas': '',
@@ -125,6 +143,25 @@ class VistasTest(BaseVistas):
         self.assertEqual(self.client.get(reverse('cotizador:detalle', args=[cot.pk])).status_code, 200)
         self.assertEqual(self.client.get(reverse('cotizador:lista') + '?q=vivas').status_code, 200)
         self.assertEqual(self.client.get(reverse('cotizador:nueva') + f'?copiar={cot.pk}').status_code, 200)
+
+    def test_word_con_dos_tipos_de_vehiculo(self):
+        minibus = TipoVehiculo.objects.get(nombre='Minibus')
+        datos = self.post_datos(**{'lineas-TOTAL_FORMS': '2', 'lineas-1-vehiculo': minibus.pk, 'lineas-1-cantidad': '2',
+                                   'lineas-1-choferes': '1', 'lineas-1-descripcion': 'MINIBUS  22 pasajeros'})
+        self.client.post(reverse('cotizador:nueva'), datos)
+        cot = Cotizacion.objects.get()
+        self.assertEqual(cot.vehiculos_texto, '1 × Piso elevado, 2 × Minibus')
+        self.assertEqual(cot.detalle['capacidad'], 92)
+        xml = zipfile.ZipFile(io.BytesIO(word.generar(cot))).read('word/document.xml').decode()
+        self.assertIn('BUS  Piso Elevado 50 pasajeros', xml)
+        self.assertIn('MINIBUS  22 pasajeros', xml)
+        self.assertIn('>02 <', xml)
+        # Editar: quitar el minibus
+        linea = cot.lineas.get(vehiculo=minibus)
+        datos.update({'lineas-INITIAL_FORMS': '2', 'lineas-0-id': cot.lineas.exclude(pk=linea.pk).get().pk,
+                      'lineas-1-id': linea.pk, 'lineas-1-DELETE': 'on'})
+        self.client.post(reverse('cotizador:editar', args=[cot.pk]), datos)
+        self.assertEqual(cot.lineas.count(), 1)
 
     def test_vista_previa(self):
         r = self.client.post(reverse('cotizador:calcular'), self.post_datos())
@@ -262,3 +299,59 @@ class ExcelTest(BaseVistas):
             self.assertEqual(resumen['A2'].value, 'Mauricio Vivas')
             self.assertEqual(resumen['G2'].value, 1878500 - 800000)
             self.assertEqual(wb['Movimientos']['I3'].value, 1078500)
+
+
+class ReciboTest(BaseVistas):
+    def test_letras(self):
+        from .letras import numero_a_letras, pesos_en_letras
+        self.assertEqual(numero_a_letras(21000), 'veintiún mil')
+        self.assertEqual(numero_a_letras(1878500), 'un millón ochocientos setenta y ocho mil quinientos')
+        self.assertEqual(numero_a_letras(100), 'cien')
+        self.assertEqual(numero_a_letras(121000000), 'ciento veintiún millones')
+        self.assertEqual(pesos_en_letras(Decimal('800000.50')), 'PESOS OCHOCIENTOS MIL CON 50/100')
+
+    def test_recibo_de_pago(self):
+        self.client.post(reverse('cotizador:nueva'), self.post_datos())
+        cot = Cotizacion.objects.get()
+        self.client.post(reverse('cotizador:cambiar_estado', args=[cot.pk]), {'estado': 'aceptada'})
+        url = reverse('cotizador:movimiento_nuevo', args=[cot.pk])
+        self.client.post(url, {'fecha': '2026-10-25', 'tipo': 'pago', 'concepto': 'Seña', 'importe': '800000', 'medio': 'efectivo'})
+        self.client.post(url, {'fecha': '2026-10-28', 'tipo': 'pago', 'concepto': 'Saldo', 'importe': '1078500',
+                               'medio': 'transferencia', 'referencia': 'op 99'})
+        primero, segundo = cot.movimientos.filter(tipo='pago').order_by('numero_recibo')
+        self.assertEqual((primero.numero_recibo, segundo.numero_recibo), (1, 2))
+        self.assertIsNone(cot.movimientos.get(tipo='cargo').numero_recibo)
+
+        r = self.client.get(reverse('cotizador:recibo', args=[segundo.pk]))
+        self.assertEqual(r.status_code, 200)
+        self.assertIn('Recibo_000002_Mauricio_Vivas.docx', r['Content-Disposition'])
+        xml = zipfile.ZipFile(io.BytesIO(r.content)).read('word/document.xml').decode()
+        for texto in ('RECIBO N° 000002', 'MAURICIO VIVAS', 'PESOS UN MILLÓN SETENTA Y OCHO MIL QUINIENTOS CON 00/100',
+                      'Transferencia – op 99', '$ 1.878.500', '$ 0'):
+            self.assertIn(texto, xml)
+        # Un cargo no tiene recibo
+        self.assertEqual(self.client.get(reverse('cotizador:recibo', args=[cot.movimientos.get(tipo='cargo').pk])).status_code, 404)
+        self.assertContains(self.client.get(reverse('cotizador:detalle', args=[cot.pk])), 'Recibo 2')
+
+
+class EstadisticasTest(BaseVistas):
+    def test_estadisticas(self):
+        for numero, parada, estado, motivo in ((303, 'Orán, Salta', 'aceptada', ''), (304, 'orán, salta ', 'rechazada', 'precio'),
+                                               (305, 'Cafayate, Salta', 'rechazada', 'Precio'), (306, 'Cafayate, Salta', None, '')):
+            self.client.post(reverse('cotizador:nueva'), self.post_datos(numero=numero, paradas=parada, nuevo_cliente=f'Cliente {numero}'))
+            if estado:
+                cot = Cotizacion.objects.get(numero=numero)
+                self.client.post(reverse('cotizador:cambiar_estado', args=[cot.pk]), {'estado': estado, 'motivo': motivo})
+        from . import estadisticas
+        e = estadisticas.calcular(date(2026, 1, 1), date(2026, 12, 31))
+        self.assertEqual((e['resumen']['total'], e['resumen']['aceptadas'], e['resumen']['pendientes']), (4, 1, 1))
+        self.assertEqual(e['resumen']['tasa_aceptacion'], Decimal('33.3'))
+        self.assertEqual(e['resumen']['vendido'], Decimal('1700000'))
+        self.assertEqual(e['motivos'][0]['motivo'], 'Precio')
+        self.assertEqual(e['motivos'][0]['cantidad'], 2)
+        oran = next(d for d in e['destinos'] if d['destino'] == 'Orán, Salta')
+        self.assertEqual((oran['pedidos'], oran['aceptados']), (2, 1))
+        self.assertEqual(e['vehiculos'][0], {'vehiculo': 'Piso elevado', 'cantidad': 1, 'barra': 100})
+        r = self.client.get(reverse('cotizador:estadisticas') + '?desde=2026-01-01&hasta=2026-12-31')
+        self.assertContains(r, 'Orán, Salta')
+        self.assertContains(self.client.get(reverse('cotizador:estadisticas')), 'Estadísticas')

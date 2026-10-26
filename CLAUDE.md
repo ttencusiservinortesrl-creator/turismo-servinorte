@@ -12,11 +12,15 @@ PostgreSQL (Supabase) en línea vía `DATABASE_URL`. WhiteNoise sirve los estát
 ## Partes
 - `cotizador/models.py`: `Parametros` (una sola fila, todos los valores que componen el precio), `TipoVehiculo`,
   `Cliente`, `Cotizacion` (guarda en `detalle` el cálculo y los parámetros usados al guardar; estado
-  pendiente/aceptada/rechazada), `Movimiento` (cuenta corriente de cada venta: cargos y pagos), `Lugar` (caché del mapa).
+  pendiente/aceptada/rechazada), `LineaVehiculo` (uno o varios tipos de vehículo por cotización, con cantidad y
+  choferes), `Movimiento` (cuenta corriente de cada venta: cargos y pagos; los pagos llevan `numero_recibo`
+  correlativo), `Lugar` (caché del mapa).
 - `cotizador/calculo.py`: costo del viaje igual que la planilla (testeado contra la hoja COT302). Ítems por
   vehículo × cantidad de vehículos; filas de margen mínimo/intermedio/mercado/óptimo y referencia por km.
 - `cotizador/rutas.py`: km por ruta con Nominatim (buscar lugar) + OSRM (distancia manejando). Servicios
   gratuitos de OpenStreetMap, sin clave; requieren User-Agent (`MAPAS_USER_AGENT`).
+- `cotizador/recibo.py` + `letras.py`: recibo de pago en Word (mismo membrete que la cotización, importe en letras).
+- `cotizador/estadisticas.py`: aceptación, motivos de rechazo, destinos, clientes y vehículos (barras en HTML/CSS).
 - `cotizador/excel.py`: cuentas corrientes en Excel (resumen por cliente, ventas, movimientos con saldo), openpyxl.
 - `static/css/tema.css`: diseño (paleta de azules del logo #1F3B7A); el logo está en `static/img/logo.png`.
 - `cotizador/word.py` + `cotizador/plantilla/cotizacion.docx`: el Word. La plantilla se generó con
@@ -25,6 +29,8 @@ PostgreSQL (Supabase) en línea vía `DATABASE_URL`. WhiteNoise sirve los estát
 
 ## Decisiones
 - Cambiar parámetros no toca las cotizaciones guardadas; al editar y guardar una, se recalcula con los de hoy.
+- Cada ítem del costo se calcula por vehículo (choferes y rendimiento de cada línea) y se suma; "Otros gastos"
+  es un total del viaje. Hotel y peajes son por vehículo.
 - Km totales = km en servicio + km vacíos. El mapa carga los km en servicio; se pueden corregir a mano.
 - "usar" en el resumen redondea la tarifa a $10.000.
 - Viajes a futuro: si la salida es más de `proyectar_desde_dias` (30) después de la fecha de la cotización, se

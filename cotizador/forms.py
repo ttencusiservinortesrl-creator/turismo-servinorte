@@ -1,6 +1,6 @@
 from django import forms
 
-from .models import Cliente, Cotizacion, Movimiento, Parametros, TipoVehiculo
+from .models import Cliente, Cotizacion, LineaVehiculo, Movimiento, Parametros, TipoVehiculo
 
 
 def _estilo(form):
@@ -23,7 +23,7 @@ class CotizacionForm(forms.ModelForm):
             'numero', 'fecha', 'cliente',
             'origen', 'paradas', 'ida_y_vuelta', 'itinerario', 'km_servicio', 'km_vacios', 'km_mapa',
             'salida', 'regreso', 'texto_salida', 'dias', 'noches',
-            'vehiculo', 'cantidad_vehiculos', 'descripcion_vehiculo', 'choferes', 'viaticos_por_chofer', 'habitaciones',
+            'viaticos_por_chofer', 'habitaciones',
             'incluye_hotel', 'incluye_estacionamiento', 'incluye_lavadero', 'peaje', 'otros_gastos',
             'proyectar_inflacion', 'inflacion_mensual', 'tarifa_neta', 'incluye', 'no_incluye', 'notas_internas',
         ]
@@ -40,8 +40,6 @@ class CotizacionForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['vehiculo'].queryset = TipoVehiculo.objects.filter(activo=True)
-        self.fields['vehiculo'].empty_label = None
         self.fields['cliente'].required = False
         self.fields['cliente'].empty_label = '— elegir cliente —'
         _estilo(self)
@@ -64,6 +62,29 @@ class CotizacionForm(forms.ModelForm):
         if commit:
             cot.save()
         return cot
+
+
+class LineaVehiculoForm(forms.ModelForm):
+    class Meta:
+        model = LineaVehiculo
+        fields = ['vehiculo', 'cantidad', 'choferes', 'descripcion']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['vehiculo'].queryset = TipoVehiculo.objects.filter(activo=True)
+        self.fields['vehiculo'].empty_label = None
+        self.fields['cantidad'].min_value = 1
+        _estilo(self)
+
+
+def lineas_validas(formset):
+    """Las líneas completas del formset (para la vista previa, aunque el resto tenga errores)."""
+    lineas = []
+    for f in formset.forms:
+        datos = getattr(f, 'cleaned_data', None) or {}
+        if datos.get('vehiculo') and not datos.get('DELETE'):
+            lineas.append(datos)
+    return lineas
 
 
 class ClienteForm(forms.ModelForm):

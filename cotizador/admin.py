@@ -1,6 +1,11 @@
 from django.contrib import admin
 
-from .models import Cliente, Cotizacion, Lugar, Movimiento, Parametros, TipoVehiculo
+from .models import Cliente, Cotizacion, LineaVehiculo, Lugar, Movimiento, Parametros, TipoVehiculo
+
+
+class LineaVehiculoInline(admin.TabularInline):
+    model = LineaVehiculo
+    extra = 0
 
 
 class MovimientoInline(admin.TabularInline):
@@ -13,7 +18,7 @@ class CotizacionAdmin(admin.ModelAdmin):
     list_display = ['numero', 'fecha', 'cliente', 'estado', 'itinerario', 'tarifa_neta']
     list_filter = ['estado']
     search_fields = ['cliente__nombre', 'itinerario']
-    inlines = [MovimientoInline]
+    inlines = [LineaVehiculoInline, MovimientoInline]
 
 
 @admin.register(Cliente)

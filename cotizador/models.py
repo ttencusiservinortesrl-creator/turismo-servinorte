@@ -172,18 +172,15 @@ class Cotizacion(models.Model):
     noches = models.PositiveIntegerField('Noches', default=0)
 
     # Vehículo y personal
-    vehiculo = models.ForeignKey(TipoVehiculo, on_delete=models.PROTECT)
-    cantidad_vehiculos = models.PositiveIntegerField('Cantidad de vehículos', default=1)
-    descripcion_vehiculo = models.CharField('Vehículo (como sale en el Word)', max_length=120)
-    choferes = models.PositiveIntegerField('Choferes por vehículo', default=1)
+    # Los vehículos van en LineaVehiculo (puede haber varios tipos en una misma cotización).
     viaticos_por_chofer = models.PositiveIntegerField('Viáticos por chofer', default=1)
-    habitaciones = models.PositiveIntegerField('Habitaciones de hotel', default=1)
+    habitaciones = models.PositiveIntegerField('Habitaciones de hotel por vehículo', default=1)
 
     # Gastos que se eligen en cada viaje
     incluye_hotel = models.BooleanField('Hotel', default=True)
     incluye_estacionamiento = models.BooleanField('Estacionamiento', default=True)
     incluye_lavadero = models.BooleanField('Lavadero', default=True)
-    peaje = models.DecimalField('Peajes ($)', max_digits=14, decimal_places=2, default=0)
+    peaje = models.DecimalField('Peajes por vehículo ($)', max_digits=14, decimal_places=2, default=0)
     otros_gastos = models.DecimalField('Otros gastos ($)', max_digits=14, decimal_places=2, default=0)
 
     # Precio
@@ -208,6 +205,14 @@ class Cotizacion(models.Model):
 
     def __str__(self):
         return f'COT {self.numero} – {self.cliente}'
+
+    @property
+    def vehiculos_texto(self):
+        return ', '.join(f'{l.cantidad} × {l.vehiculo.nombre}' for l in self.lineas.all())
+
+    @property
+    def cantidad_vehiculos(self):
+        return sum(l.cantidad for l in self.lineas.all())
 
     @property
     def km_totales(self):
@@ -263,6 +268,24 @@ class Cotizacion(models.Model):
                                       concepto=concepto, importe=self.total_con_iva, automatico=True)
 
 
+class LineaVehiculo(models.Model):
+    """Un tipo de vehículo dentro de una cotización (ej.: 1 bus piso elevado + 1 minibus)."""
+    cotizacion = models.ForeignKey(Cotizacion, on_delete=models.CASCADE, related_name='lineas')
+    vehiculo = models.ForeignKey(TipoVehiculo, on_delete=models.PROTECT, verbose_name='Vehículo')
+    cantidad = models.PositiveIntegerField(default=1)
+    choferes = models.PositiveIntegerField('Choferes c/u', default=1)
+    descripcion = models.CharField('Cómo sale en el Word', max_length=120)
+    orden = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['orden', 'id']
+        verbose_name = 'vehículo de la cotización'
+        verbose_name_plural = 'vehículos de la cotización'
+
+    def __str__(self):
+        return f'{self.cantidad} × {self.vehiculo.nombre}'
+
+
 class Movimiento(models.Model):
     """Cuenta corriente de una venta: cargos (lo que debe) y pagos (lo que pagó)."""
     CARGO, PAGO = 'cargo', 'pago'
@@ -278,6 +301,7 @@ class Movimiento(models.Model):
     referencia = models.CharField('Comprobante / referencia', max_length=120, blank=True,
         help_text='N° de recibo, factura, transferencia o cheque.')
     automatico = models.BooleanField(default=False, editable=False)
+    numero_recibo = models.PositiveIntegerField('N° de recibo', null=True, blank=True, unique=True, editable=False)
     creado = models.DateTimeField(auto_now_add=True)
     creado_por = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
 
@@ -288,3 +312,10 @@ class Movimiento(models.Model):
 
     def __str__(self):
         return f'{self.get_tipo_display()} {self.importe} – {self.concepto}'
+
+    def save(self, *args, **kwargs):
+        # Cada pago lleva su número de recibo correlativo.
+        if self.tipo == self.PAGO and not self.numero_recibo:
+            ultimo = Movimiento.objects.aggregate(m=models.Max('numero_recibo'))['m']
+            self.numero_recibo = (ultimo or 0) + 1
+        super().save(*args, **kwargs)
