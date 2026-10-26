@@ -1,0 +1,54 @@
+<div class="card mb-3">
+    <div class="card-header">Diagrama de unidades</div>
+    <div class="card-body">
+        {% if asignaciones %}
+            {% for a in asignaciones %}
+                <div><i class="bi bi-check-circle text-success"></i> Unidad <b>{{ a.unidad }}</b> anotada en el diagrama del {{ a.desde|date:"d/m" }} al {{ a.hasta|date:"d/m/Y" }}
+                    <span class="text-muted small">· {{ a.anotado_en|date:"d/m H:i" }}{% if a.anotado_por %} por {{ a.anotado_por.get_full_name|default:a.anotado_por.username }}{% endif %}</span></div>
+            {% endfor %}
+            <div class="form-text">Si cambia algo del viaje, corregilo directamente en el Excel del diagrama.</div>
+        {% elif not diagrama_conectado %}
+            <div class="text-muted">La app todavía no está conectada con el diagrama de Drive. <a href="{% url 'cotizador:unidades' %}">Ver cómo conectarlo</a>.</div>
+        {% elif error_diagrama %}
+            <div class="alert alert-warning mb-0">{{ error_diagrama }}</div>
+        {% else %}
+            <div id="pregunta-unidades" class="d-flex flex-wrap align-items-center gap-2">
+                <span class="me-auto"><i class="bi bi-question-circle text-primary"></i> Esta venta todavía no tiene unidades asignadas. ¿Querés asignarlas ahora en el diagrama?</span>
+                <button type="button" class="btn btn-primary" id="si-asignar"><i class="bi bi-calendar-plus"></i> Sí, elegir unidades</button>
+                <button type="button" class="btn btn-outline-secondary" id="no-asignar">Todavía no</button>
+            </div>
+            <div id="sin-asignar" class="d-none small text-muted"><i class="bi bi-clock"></i> Unidades sin asignar. <a href="#" id="asignar-luego">Asignar ahora</a></div>
+            <div id="elegir-unidades" class="d-none">
+            <p class="mb-2">Elegí {% if cot.cantidad_vehiculos > 1 %}las {{ cot.cantidad_vehiculos }} unidades{% else %}la unidad{% endif %} para este viaje
+                ({{ cot.salida|date:"d/m" }} al {{ cot.regreso|date:"d/m" }}). Se escribe en el diagrama:</p>
+            <div class="p-2 rounded-3 mb-3 small" style="background: var(--azul-50)">
+                {% for r in renglones_diagrama %}<div><b>{{ r }}</b></div>{% endfor %}
+            </div>
+            <form method="post" action="{% url 'cotizador:anotar_diagrama' cot.pk %}">
+                {% csrf_token %}
+                <div class="d-flex flex-wrap gap-2 mb-3">
+                    {% for u in unidades_diagrama %}
+                        <label class="unidad-opcion {% if not u.libre %}ocupada{% endif %}" title="{{ u.detalle|default:'Libre' }}">
+                            <input class="form-check-input me-1" type="checkbox" name="unidades" value="{{ u.unidad }}" {% if not u.libre %}disabled{% endif %}>
+                            {{ u.unidad }} <span class="small">{% if u.libre %}libre{% else %}ocupada{% endif %}</span>
+                        </label>
+                    {% endfor %}
+                </div>
+                <button class="btn btn-primary" type="submit" onclick="return confirm('¿Anotar en el diagrama de Drive? Lo van a ver todos los que usan la planilla.');"><i class="bi bi-calendar-plus"></i> Anotar en el diagrama</button>
+                <button type="button" class="btn btn-outline-secondary ms-1" id="cancelar-asignar">Todavía no</button>
+                <span class="small text-muted ms-2">Pasá el mouse por una unidad ocupada para ver qué tiene.</span>
+            </form>
+            </div>
+            <script>
+            (function () {
+                const ver = (id, si) => document.getElementById(id).classList.toggle('d-none', !si);
+                const mostrar = (paso) => { ver('pregunta-unidades', paso === 'pregunta'); ver('elegir-unidades', paso === 'elegir'); ver('sin-asignar', paso === 'luego'); };
+                document.getElementById('si-asignar').onclick = () => mostrar('elegir');
+                document.getElementById('no-asignar').onclick = () => mostrar('luego');
+                document.getElementById('cancelar-asignar').onclick = () => mostrar('luego');
+                document.getElementById('asignar-luego').onclick = (e) => { e.preventDefault(); mostrar('elegir'); };
+            })();
+            </script>
+        {% endif %}
+    </div>
+</div>

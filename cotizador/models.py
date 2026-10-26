@@ -69,6 +69,14 @@ class Parametros(models.Model):
     no_incluye = models.TextField('No incluye (un renglón por ítem)', default='Gastos, movimientos y extras no especificados.')
     origen_habitual = models.CharField('Origen habitual de los viajes', max_length=120, default='Salta, Salta')
 
+    # Diagrama de unidades (Excel en Drive)
+    unidades_turismo = models.CharField('Unidades disponibles para turismo', max_length=200,
+        default='61, 101, 81, 90, 91, 93, 94, 95, 96, 30',
+        help_text='Números internos separados por coma, como figuran en el diagrama.')
+    diagrama_drive_id = models.CharField('Código del diagrama en Drive', max_length=120, blank=True,
+        default='15VVf08zLSZzklN-zUgKbRQxJIzlTqek_',
+        help_text='Lo que va después de /d/ en el link del archivo. Cambia cada año (PL - DIAGRAMA DE VEHICULOS 2026, 2027…).')
+
     actualizado = models.DateTimeField(auto_now=True)
     actualizado_por = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
 
@@ -78,6 +86,9 @@ class Parametros(models.Model):
 
     def __str__(self):
         return 'Parámetros de precio'
+
+    def lista_unidades(self):
+        return [u.strip() for u in self.unidades_turismo.replace(';', ',').split(',') if u.strip()]
 
     @classmethod
     def actuales(cls):
@@ -284,6 +295,24 @@ class LineaVehiculo(models.Model):
 
     def __str__(self):
         return f'{self.cantidad} × {self.vehiculo.nombre}'
+
+
+class AsignacionUnidad(models.Model):
+    """Unidad (número interno del diagrama) asignada a un viaje vendido y anotada en el diagrama."""
+    cotizacion = models.ForeignKey(Cotizacion, on_delete=models.CASCADE, related_name='asignaciones')
+    unidad = models.CharField(max_length=20)
+    desde = models.DateField()
+    hasta = models.DateField()
+    anotado_en = models.DateTimeField(auto_now_add=True)
+    anotado_por = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+
+    class Meta:
+        ordering = ['desde', 'unidad']
+        verbose_name = 'unidad asignada'
+        verbose_name_plural = 'unidades asignadas'
+
+    def __str__(self):
+        return f'Unidad {self.unidad} – COT {self.cotizacion.numero}'
 
 
 class Movimiento(models.Model):

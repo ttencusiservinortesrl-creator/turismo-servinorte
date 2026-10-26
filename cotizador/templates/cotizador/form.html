@@ -58,6 +58,7 @@
                     {% include '_campo.html' with campo=form.dias clase='col-6 col-md-2' %}
                     {% include '_campo.html' with campo=form.noches clase='col-6 col-md-2' %}
                     {% include '_campo.html' with campo=form.texto_salida clase='col-12' %}
+                    <div class="col-12" id="disponibilidad"></div>
                 </div>
             </div>
 
@@ -205,8 +206,26 @@
             $('texto_salida').value = 'desde ' + ciudad + '.' + (noches === 0 ? ' Ida y regreso en el día.' : '');
         }
     }
-    $('salida').addEventListener('change', fechas);
-    $('regreso').addEventListener('change', fechas);
+    // Unidades de turismo libres en esas fechas (leído del diagrama de Drive).
+    async function verDisponibilidad() {
+        const caja = document.getElementById('disponibilidad');
+        const s = $('salida').value, r = $('regreso').value;
+        if (!s) { caja.innerHTML = ''; return; }
+        caja.innerHTML = '<div class="small text-muted">Mirando el diagrama de unidades…</div>';
+        try {
+            const resp = await fetch('{% url "cotizador:disponibilidad" %}?desde=' + s.slice(0, 10) + '&hasta=' + (r || s).slice(0, 10));
+            const j = await resp.json();
+            if (!j.conectado) { caja.innerHTML = ''; return; }
+            if (j.error) { caja.innerHTML = '<div class="small text-warning-emphasis">Diagrama: ' + j.error + '</div>'; return; }
+            const libres = j.unidades.filter(u => u.libre).length;
+            caja.innerHTML = '<div class="small mb-1"><b>Unidades de turismo libres en esas fechas: ' + libres + ' de ' + j.unidades.length + '</b></div>' +
+                j.unidades.map(u => '<span class="chip-unidad ' + (u.libre ? 'libre' : 'ocupada') + '" title="' +
+                    (u.libre ? 'Libre' : u.detalle.replace(/"/g, '&quot;')) + '">' + u.unidad + '</span>').join('');
+        } catch (e) { caja.innerHTML = ''; }
+    }
+    $('salida').addEventListener('change', () => { fechas(); verDisponibilidad(); });
+    $('regreso').addEventListener('change', () => { fechas(); verDisponibilidad(); });
+    verDisponibilidad();
 
     document.getElementById('btn-km').addEventListener('click', async () => {
         const info = document.getElementById('km-info');

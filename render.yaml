@@ -29,3 +29,7 @@ services:
         sync: false
       - key: DJANGO_SUPERUSER_EMAIL
         sync: false
+      # Clave de la cuenta de servicio de Google para leer/escribir el diagrama de unidades
+      # (contenido completo del .json). Ver docs/conectar-diagrama.md.
+      - key: GOOGLE_SERVICE_ACCOUNT_JSON
+        sync: false

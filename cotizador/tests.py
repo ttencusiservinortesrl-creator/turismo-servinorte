@@ -385,3 +385,129 @@ class EstadisticasTest(BaseVistas):
         r = self.client.get(reverse('cotizador:estadisticas') + '?desde=2026-01-01&hasta=2026-12-31')
         self.assertContains(r, 'Orán, Salta')
         self.assertContains(self.client.get(reverse('cotizador:estadisticas')), 'Estadísticas')
+
+
+def diagrama_de_prueba():
+    """Un diagrama chico con el mismo formato que el real (sin datos reales)."""
+    import openpyxl
+    from openpyxl.comments import Comment
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
+    for mes, dias, fila_fechas in ((10, 31, 2), (11, 30, 1)):
+        ws = wb.create_sheet(f'{mes}-2026')
+        for d in range(1, dias + 1):
+            ws.cell(row=fila_fechas, column=d + 1, value=datetime(2026, mes, d))
+        base = fila_fechas + 1
+        for i, unidad in enumerate([61, '30 - TRANSIT', 15]):
+            ws.cell(row=base + i * 3, column=1, value=unidad)
+            ws.merge_cells(start_row=base + i * 3, start_column=1, end_row=base + i * 3 + 2, end_column=1)
+        ws.cell(row=base + 9, column=1, value='REFERENCIAS')
+        if mes == 10:
+            ws['E3'] = 'TAN'                                # 61 ocupada el 4/10
+            ws['H3'] = 'MAT'                                # 61 ocupada del 7 al 9/10 (celda combinada)
+            ws.merge_cells('H3:J3')
+            ws['C4'] = 'LIBRE'                              # "LIBRE" cuenta como libre
+            ws['E6'] = 'MANSFIELD'
+            ws['E6'].comment = Comment('comentario que no se tiene que perder', 'x')
+    salida = io.BytesIO()
+    wb.save(salida)
+    return salida.getvalue()
+
+
+class DiagramaTest(TestCase):
+    def test_disponibilidad(self):
+        from . import diagrama as dg
+        d = dg.Diagrama(diagrama_de_prueba())
+        disp = d.disponibilidad(['61', '30'], date(2026, 10, 2), date(2026, 10, 9))
+        self.assertEqual(disp['61'][date(2026, 10, 2)], '')
+        self.assertEqual(disp['61'][date(2026, 10, 4)], 'TAN')
+        self.assertEqual(disp['61'][date(2026, 10, 8)], 'MAT')      # dentro de la combinación
+        self.assertEqual(disp['30'][date(2026, 10, 4)], 'MANSFIELD')
+        self.assertEqual(d.libres(['61', '30', '15'], date(2026, 10, 1), date(2026, 10, 3)), ['61', '30', '15'])
+        self.assertEqual(d.libres(['61', '30', '15'], date(2026, 10, 4), date(2026, 10, 4)), ['15'])
+        # Mes sin hoja: no se puede saber
+        self.assertIsNone(d.disponibilidad(['61'], date(2026, 12, 1), date(2026, 12, 1))['61'][date(2026, 12, 1)])
+
+    def test_anotar_varios_dias_y_cruzando_de_mes(self):
+        from . import diagrama as dg
+        original = diagrama_de_prueba()
+        nuevo = dg.anotar(original, '30', date(2026, 10, 30), date(2026, 11, 2),
+                          ['CLIENTE X', 'SALTA - TUCUMAN - SALTA', 'COT 400'])
+        d = dg.Diagrama(nuevo)
+        disp = d.disponibilidad(['30'], date(2026, 10, 30), date(2026, 11, 2))['30']
+        self.assertTrue(all(t == 'CLIENTE X / SALTA - TUCUMAN - SALTA / COT 400' for t in disp.values()))
+        octubre = d.libro['10-2026']
+        self.assertIn('AE6:AF6', [str(r) for r in octubre.merged_cells.ranges])
+        self.assertIn('B5:C5', [str(r) for r in d.libro['11-2026'].merged_cells.ranges])
+        # El resto del archivo queda igual (incluido el comentario)
+        self.assertEqual(octubre['E6'].comment.text, 'comentario que no se tiene que perder')
+        a, b = zipfile.ZipFile(io.BytesIO(original)), zipfile.ZipFile(io.BytesIO(nuevo))
+        cambiados = {n for n in a.namelist() if a.read(n) != b.read(n)}
+        self.assertEqual(cambiados, {'xl/worksheets/sheet1.xml', 'xl/worksheets/sheet2.xml'})
+
+    def test_no_pisa_lo_que_ya_hay(self):
+        from . import diagrama as dg
+        with self.assertRaisesRegex(dg.ErrorDiagrama, 'no está libre'):
+            dg.anotar(diagrama_de_prueba(), '61', date(2026, 10, 3), date(2026, 10, 5), ['X'])
+        with self.assertRaisesRegex(dg.ErrorDiagrama, 'no está libre'):
+            dg.anotar(diagrama_de_prueba(), '61', date(2026, 10, 9), date(2026, 10, 9), ['X'])
+
+
+class DiagramaVistasTest(BaseVistas):
+    def setUp(self):
+        super().setUp()
+        import tempfile
+        archivo = tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False)
+        archivo.write(diagrama_de_prueba())
+        archivo.close()
+        self.archivo = archivo.name
+        self.entorno = mock.patch.dict('os.environ', {'DIAGRAMA_LOCAL': self.archivo})
+        self.entorno.start()
+        p = Parametros.actuales()
+        p.unidades_turismo = '61, 30, 15'
+        p.save()
+
+    def tearDown(self):
+        self.entorno.stop()
+        import os
+        os.remove(self.archivo)
+
+    def test_disponibilidad_y_anotar_venta(self):
+        r = self.client.get(reverse('cotizador:disponibilidad') + '?desde=2026-10-04&hasta=2026-10-04')
+        self.assertEqual({u['unidad']: u['libre'] for u in r.json()['unidades']}, {'61': False, '30': False, '15': True})
+
+        datos = self.post_datos(salida='2026-10-20T07:00', regreso='2026-10-21T20:00', dias='2', noches='1')
+        self.client.post(reverse('cotizador:nueva'), datos)
+        cot = Cotizacion.objects.get()
+        # Pendiente: no se ofrece asignar
+        self.assertNotContains(self.client.get(reverse('cotizador:detalle', args=[cot.pk])), 'elegir unidades')
+        r = self.client.post(reverse('cotizador:anotar_diagrama', args=[cot.pk]), {'unidades': ['61']})
+        self.assertEqual(r.status_code, 404)
+
+        self.client.post(reverse('cotizador:cambiar_estado', args=[cot.pk]), {'estado': 'aceptada'})
+        r = self.client.get(reverse('cotizador:detalle', args=[cot.pk]))
+        self.assertContains(r, 'elegir unidades')
+        self.assertContains(r, 'Todavía no')
+        self.assertContains(r, 'MAURICIO VIVAS')
+
+        self.client.post(reverse('cotizador:anotar_diagrama', args=[cot.pk]), {'unidades': ['61']})
+        self.assertEqual(list(cot.asignaciones.values_list('unidad', flat=True)), ['61'])
+        from . import diagrama as dg
+        with open(self.archivo, 'rb') as f:
+            disp = dg.Diagrama(f.read()).disponibilidad(['61'], date(2026, 10, 20), date(2026, 10, 20))
+        self.assertEqual(disp['61'][date(2026, 10, 20)], 'MAURICIO VIVAS / SALTA - ORÁN - SALTA / COT 303 · 2 DÍAS - 1 NOCHES')
+        self.assertContains(self.client.get(reverse('cotizador:detalle', args=[cot.pk])), 'anotada en el diagrama')
+        self.assertContains(self.client.get(reverse('cotizador:ventas')), '>61<')
+        r = self.client.get(reverse('cotizador:unidades') + '?desde=2026-10-19&hasta=2026-10-22')
+        self.assertContains(r, 'MAURICIO VIVAS')
+
+        # Volver a pendiente avisa que hay que borrarlo a mano del Excel
+        r = self.client.post(reverse('cotizador:cambiar_estado', args=[cot.pk]), {'estado': 'pendiente'}, follow=True)
+        self.assertContains(r, 'borrar a mano del diagrama la unidad 61')
+        self.assertFalse(cot.asignaciones.exists())
+
+    def test_sin_conexion(self):
+        with mock.patch.dict('os.environ', {'DIAGRAMA_LOCAL': '', 'GOOGLE_SERVICE_ACCOUNT_JSON': ''}):
+            self.assertContains(self.client.get(reverse('cotizador:unidades')), 'Conectar el diagrama de Drive')
+            r = self.client.get(reverse('cotizador:disponibilidad') + '?desde=2026-10-04')
+            self.assertEqual(r.json()['conectado'], False)

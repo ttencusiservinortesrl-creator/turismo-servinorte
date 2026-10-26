@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Cliente, Cotizacion, LineaVehiculo, Lugar, Movimiento, Parametros, TipoVehiculo
+from .models import AsignacionUnidad, Cliente, Cotizacion, LineaVehiculo, Lugar, Movimiento, Parametros, TipoVehiculo
 
 
 class LineaVehiculoInline(admin.TabularInline):
@@ -39,3 +39,4 @@ class LugarAdmin(admin.ModelAdmin):
 
 
 admin.site.register(Parametros)
+admin.site.register(AsignacionUnidad)

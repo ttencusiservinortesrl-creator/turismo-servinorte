@@ -196,3 +196,17 @@ a:hover { text-decoration: underline; }
 #resultado .table { font-size: .85rem; }
 #resultado .table > :not(caption) > * > * { padding: .45rem .4rem; }
 .nombre-fila .usar-tarifa { font-size: .75rem; box-shadow: none; }
+
+/* ---- Unidades / diagrama ---- */
+.grilla-unidades th, .grilla-unidades td { font-size: .78rem; }
+.grilla-unidades th.finde { color: var(--azul-700); }
+.grilla-unidades td.dia { min-width: 4.2rem; max-width: 6rem; text-align: center; border-left: 1px solid #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.grilla-unidades td.libre { background: #daf3e6 !important; }
+.grilla-unidades td.ocupado { background: var(--azul-100) !important; color: var(--azul-900); cursor: help; }
+.grilla-unidades td.sin-dato { background: #f1f3f7 !important; color: var(--texto-suave); }
+.unidad-opcion { border: 1px solid var(--borde); border-radius: 10px; padding: .35rem .7rem; background: #fff; cursor: pointer; }
+.unidad-opcion:hover { border-color: var(--azul-300); background: var(--azul-50); }
+.unidad-opcion.ocupada { opacity: .55; cursor: help; background: #f6f7fa; }
+.chip-unidad { display: inline-block; border-radius: 999px; padding: .15rem .6rem; margin: 0 .25rem .25rem 0; font-size: .8rem; font-weight: 600; }
+.chip-unidad.libre { background: #daf3e6; color: #11663f; }
+.chip-unidad.ocupada { background: #eceff4; color: #6b7487; cursor: help; text-decoration: line-through; }

@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% block title %}Unidades{% endblock %}
+{% block content %}
+<div class="encabezado">
+    <h1><span class="icono"><i class="bi bi-calendar3"></i></span> Unidades de turismo</h1>
+    {% if conectado %}
+    <form class="d-flex flex-wrap gap-2 align-items-end" method="get">
+        <div><label class="small text-muted" for="desde">Desde</label><input class="form-control" type="date" id="desde" name="desde" value="{{ desde|date:'Y-m-d' }}"></div>
+        <div><label class="small text-muted" for="hasta">Hasta</label><input class="form-control" type="date" id="hasta" name="hasta" value="{{ hasta|date:'Y-m-d' }}"></div>
+        <button class="btn btn-primary" type="submit"><i class="bi bi-funnel"></i> Ver</button>
+    </form>
+    {% endif %}
+</div>
+
+{% if not conectado %}
+    <div class="card" style="max-width: 820px">
+        <div class="card-header">Conectar el diagrama de Drive</div>
+        <div class="card-body">
+            <p>Para ver qué unidades están libres y anotar las ventas, la app necesita permiso para abrir
+                <b>PL - DIAGRAMA DE VEHICULOS</b> en Drive. Se hace una sola vez; los pasos están en el archivo
+                <code>docs/conectar-diagrama.md</code> del proyecto.</p>
+            <p class="mb-0 text-muted small">Unidades de turismo configuradas: {{ p.unidades_turismo }} (se cambian en Parámetros).</p>
+        </div>
+    </div>
+{% elif error %}
+    <div class="alert alert-warning">{{ error }}</div>
+{% else %}
+    <p class="bajada">Leído del diagrama de Drive (se actualiza cada 2 minutos). Verde: libre. Pasá el mouse por un día ocupado para ver el servicio.</p>
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-sm align-middle grilla-unidades mb-0">
+                <thead>
+                    <tr><th>Unidad</th>
+                        {% for d in dias %}<th class="text-center {% if d.weekday >= 5 %}finde{% endif %}">{{ d|date:"D" }}<br>{{ d|date:"d/m" }}</th>{% endfor %}
+                        <th class="num">Días libres</th></tr>
+                </thead>
+                <tbody>
+                {% for f in filas %}
+                    <tr>
+                        <td class="fw-semibold">{{ f.unidad }}</td>
+                        {% for t in f.dias %}
+                            {% if t == '' %}<td class="dia libre" title="Libre"></td>
+                            {% elif t is None %}<td class="dia sin-dato" title="No figura en el diagrama">?</td>
+                            {% else %}<td class="dia ocupado" title="{{ t }}">{{ t|truncatechars:12 }}</td>{% endif %}
+                        {% endfor %}
+                        <td class="num">{{ f.libres }}</td>
+                    </tr>
+                {% endfor %}
+                    <tr class="table-secondary"><td class="small">Libres</td>
+                        {% for n in libres_por_dia %}<td class="text-center fw-semibold">{{ n }}</td>{% endfor %}<td></td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+{% endif %}
+{% endblock %}

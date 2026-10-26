@@ -13,10 +13,10 @@ from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_POST
 
-from . import calculo, estadisticas as estadisticas_calculo, excel, recibo, rutas, word
+from . import calculo, diagrama as dg, drive, estadisticas as estadisticas_calculo, excel, recibo, rutas, word
 from .forms import (ClienteForm, CotizacionForm, LineaVehiculoForm, MovimientoForm, ParametrosForm,
                     TipoVehiculoForm, lineas_validas)
-from .models import Cliente, Cotizacion, LineaVehiculo, Movimiento, Parametros, TipoVehiculo
+from .models import AsignacionUnidad, Cliente, Cotizacion, LineaVehiculo, Movimiento, Parametros, TipoVehiculo
 
 logger = logging.getLogger(__name__)
 
@@ -151,7 +151,110 @@ def detalle(request, pk):
             'pago_urgente': saldo > 0 and cot.salida - timezone.now() < timedelta(hours=72),
             'mov_form': MovimientoForm(initial={'fecha': timezone.localdate(), 'tipo': Movimiento.PAGO}),
         })
+        contexto.update(_diagrama_para_venta(cot))
     return render(request, 'cotizador/detalle.html', contexto)
+
+
+def _fechas_viaje(cot):
+    return timezone.localtime(cot.salida).date(), timezone.localtime(cot.regreso).date()
+
+
+def renglones_diagrama(cot):
+    """Los 3 renglones que se escriben en el diagrama: cliente / recorrido / detalle."""
+    ciudades = [cot.origen] + [p for p in cot.paradas.splitlines() if p.strip()]
+    if cot.ida_y_vuelta:
+        ciudades.append(cot.origen)
+    recorrido = ' - '.join(c.split(',')[0].strip().upper() for c in ciudades)
+    detalle = f'COT {cot.numero}'
+    if cot.noches:
+        detalle += f' · {cot.dias} DÍAS - {cot.noches} NOCHES'
+    return [cot.cliente.nombre.upper(), recorrido, detalle]
+
+
+def _resumen_disponibilidad(disponibilidad):
+    return [{'unidad': u, 'libre': all(t == '' for t in dias.values()),
+             'detalle': ' | '.join(f'{d:%d/%m}: {t or "sin hoja en el diagrama"}' for d, t in dias.items() if t != '')}
+            for u, dias in disponibilidad.items()]
+
+
+def _diagrama_para_venta(cot):
+    """Datos para la tarjeta "Diagrama de unidades" de una venta aceptada."""
+    datos = {'asignaciones': list(cot.asignaciones.all()), 'diagrama_conectado': drive.configurado(),
+             'renglones_diagrama': renglones_diagrama(cot)}
+    if datos['asignaciones'] or not datos['diagrama_conectado']:
+        return datos
+    desde, hasta = _fechas_viaje(cot)
+    p = Parametros.actuales()
+    try:
+        disponibilidad = drive.diagrama_actual(p).disponibilidad(p.lista_unidades(), desde, hasta)
+    except (drive.ErrorDrive, dg.ErrorDiagrama) as e:
+        datos['error_diagrama'] = str(e)
+        return datos
+    datos['unidades_diagrama'] = _resumen_disponibilidad(disponibilidad)
+    return datos
+
+
+@login_required
+@require_POST
+def anotar_diagrama(request, pk):
+    cot = get_object_or_404(Cotizacion, pk=pk, estado=Cotizacion.ACEPTADA)
+    elegidas = request.POST.getlist('unidades')
+    if not elegidas:
+        messages.error(request, 'Elegí al menos una unidad para anotar en el diagrama.')
+        return redirect('cotizador:detalle', pk)
+    p = Parametros.actuales()
+    desde, hasta = _fechas_viaje(cot)
+    renglones = renglones_diagrama(cot)
+    try:
+        drive.anotar(p.diagrama_drive_id, [(u, desde, hasta, renglones) for u in elegidas])
+    except (drive.ErrorDrive, dg.ErrorDiagrama) as e:
+        messages.error(request, f'No se anotó en el diagrama: {e}')
+        return redirect('cotizador:detalle', pk)
+    for u in elegidas:
+        AsignacionUnidad.objects.create(cotizacion=cot, unidad=u, desde=desde, hasta=hasta, anotado_por=request.user)
+    que = f'unidades {", ".join(elegidas)} anotadas' if len(elegidas) > 1 else f'unidad {elegidas[0]} anotada'
+    messages.success(request, f'Listo: {que} en el diagrama del {desde:%d/%m} al {hasta:%d/%m}.')
+    return redirect('cotizador:detalle', pk)
+
+
+@login_required
+def disponibilidad(request):
+    """Para el formulario: qué unidades de turismo están libres entre dos fechas."""
+    desde = parse_date(request.GET.get('desde', ''))
+    hasta = parse_date(request.GET.get('hasta', '')) or desde
+    if not desde or not drive.configurado():
+        return JsonResponse({'conectado': drive.configurado(), 'unidades': []})
+    if hasta < desde or (hasta - desde).days > 60:
+        return JsonResponse({'conectado': True, 'error': 'Revisá las fechas del viaje.', 'unidades': []})
+    p = Parametros.actuales()
+    try:
+        disp = drive.diagrama_actual(p).disponibilidad(p.lista_unidades(), desde, hasta)
+    except (drive.ErrorDrive, dg.ErrorDiagrama) as e:
+        return JsonResponse({'conectado': True, 'error': str(e), 'unidades': []})
+    return JsonResponse({'conectado': True, 'unidades': _resumen_disponibilidad(disp)})
+
+
+@login_required
+def unidades(request):
+    """Grilla de las unidades de turismo por día, leída del diagrama."""
+    hoy = timezone.localdate()
+    desde = parse_date(request.GET.get('desde', '')) or hoy
+    hasta = parse_date(request.GET.get('hasta', '')) or desde + timedelta(days=13)
+    if hasta < desde or (hasta - desde).days > 45:
+        hasta = desde + timedelta(days=13)
+    p = Parametros.actuales()
+    dias = [desde + timedelta(days=i) for i in range((hasta - desde).days + 1)]
+    contexto = {'desde': desde, 'hasta': hasta, 'dias': dias, 'conectado': drive.configurado(),
+                'mail_cuenta': drive.mail_cuenta(), 'p': p}
+    if contexto['conectado']:
+        try:
+            disp = drive.diagrama_actual(p).disponibilidad(p.lista_unidades(), desde, hasta)
+            contexto['filas'] = [{'unidad': u, 'dias': [disp[u][d] for d in dias],
+                                  'libres': sum(1 for d in dias if disp[u][d] == '')} for u in p.lista_unidades()]
+            contexto['libres_por_dia'] = [sum(1 for u in p.lista_unidades() if disp[u][d] == '') for d in dias]
+        except (drive.ErrorDrive, dg.ErrorDiagrama) as e:
+            contexto['error'] = str(e)
+    return render(request, 'cotizador/unidades.html', contexto)
 
 
 @login_required
@@ -167,6 +270,11 @@ def cambiar_estado(request, pk):
             messages.error(request, 'Esta venta ya tiene pagos o cargos cargados. Borralos primero de la cuenta corriente.')
             return redirect('cotizador:detalle', pk)
         cot.movimientos.filter(automatico=True).delete()
+    asignadas = [a.unidad for a in cot.asignaciones.all()]
+    if asignadas and nuevo != Cotizacion.ACEPTADA:
+        cot.asignaciones.all().delete()
+        messages.warning(request, f'Acordate de borrar a mano del diagrama la unidad {", ".join(asignadas)} '
+                                  f'(la app no borra lo que ya está escrito en el Excel).')
     cot.estado = nuevo
     cot.fecha_estado = timezone.localdate() if nuevo != Cotizacion.PENDIENTE else None
     cot.motivo_rechazo = request.POST.get('motivo', '').strip()[:200] if nuevo == Cotizacion.RECHAZADA else ''
@@ -246,7 +354,7 @@ def ventas(request):
     """Cotizaciones aceptadas con lo cobrado y lo que falta cobrar."""
     filtro = request.GET.get('filtro', 'saldo')
     lista_ventas = []
-    aceptadas = Cotizacion.objects.filter(estado=Cotizacion.ACEPTADA).select_related('cliente').prefetch_related('lineas__vehiculo')
+    aceptadas = Cotizacion.objects.filter(estado=Cotizacion.ACEPTADA).select_related('cliente').prefetch_related('lineas__vehiculo', 'asignaciones')
     for cot in aceptadas.order_by('salida'):
         saldo = cot.saldo()
         if filtro == 'saldo' and saldo <= 0:
@@ -392,6 +500,7 @@ def parametros(request):
                             'precio_referencia_km', 'porcentaje_iva']),
         ('Viajes a futuro', ['inflacion_mensual', 'proyectar_desde_dias']),
         ('Word de la cotización', ['origen_habitual', 'porcentaje_sena', 'vigencia_dias', 'incluye', 'no_incluye']),
+        ('Diagrama de unidades', ['unidades_turismo', 'diagrama_drive_id']),
     ]
     grupos = [(titulo, [form[c] for c in campos]) for titulo, campos in grupos]
     return render(request, 'cotizador/parametros.html', {'form': form, 'grupos': grupos, 'p': p})

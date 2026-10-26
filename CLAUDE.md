@@ -21,6 +21,10 @@ PostgreSQL (Supabase) en línea vía `DATABASE_URL`. WhiteNoise sirve los estát
   gratuitos de OpenStreetMap, sin clave; requieren User-Agent (`MAPAS_USER_AGENT`).
 - `cotizador/recibo.py` + `letras.py`: recibo de pago en Word (mismo membrete que la cotización, importe en letras).
 - `cotizador/estadisticas.py`: aceptación, motivos de rechazo, destinos, clientes y vehículos (barras en HTML/CSS).
+- `cotizador/diagrama.py` + `drive.py`: diagrama de unidades (Excel "PL - DIAGRAMA DE VEHICULOS" en Drive, de
+  Sergio García). Lee disponibilidad de las unidades de turismo (Parámetros) y anota ventas aceptadas.
+  Escribe editando solo el XML de la hoja (openpyxl al guardar pierde comentarios). Cuenta de servicio de Google
+  en `GOOGLE_SERVICE_ACCOUNT_JSON`; para probar local, `DIAGRAMA_LOCAL=<copia.xlsx>`. Ver `docs/conectar-diagrama.md`.
 - `cotizador/excel.py`: cuentas corrientes en Excel (resumen por cliente, ventas, movimientos con saldo), openpyxl.
 - `static/css/tema.css`: diseño (paleta de azules del logo #1F3B7A); el logo está en `static/img/logo.png`.
 - `cotizador/word.py` + `cotizador/plantilla/cotizacion.docx`: el Word. La plantilla se generó con
@@ -38,6 +42,8 @@ PostgreSQL (Supabase) en línea vía `DATABASE_URL`. WhiteNoise sirve los estát
   calculan sobre el costo proyectado. La inflación se puede cambiar en cada cotización (por defecto, la de Parámetros).
 - Aceptar una cotización la convierte en venta: crea un cargo automático por el total con IVA, que se
   actualiza solo si cambia el precio. Con pagos o cargos manuales no se puede rechazar ni eliminar.
+- Unidades: solo se asignan en ventas aceptadas, preguntando antes (se puede elegir "Todavía no"); nunca pisa
+  celdas ocupadas; la app no borra del diagrama (al des-aceptar avisa que hay que borrarlo a mano).
 - Cuenta corriente del cliente = movimientos de todas sus cotizaciones aceptadas (no hay tabla aparte).
 - En la cotización se elige un cliente o se escribe uno nuevo (se crea la ficha; si el nombre ya existe, se reutiliza).
 - Parámetros y vehículos requieren permiso (`change_parametros`, `change_tipovehiculo`); el resto, login.
