@@ -52,6 +52,12 @@ class Parametros(models.Model):
         help_text='Para comparar: km totales × este precio.')
     porcentaje_iva = models.DecimalField('IVA (%)', max_digits=6, decimal_places=2, default=D('10.5'))
 
+    # Viajes a futuro
+    inflacion_mensual = models.DecimalField('Inflación mensual estimada (%)', max_digits=6, decimal_places=2,
+        default=D('1.70'), help_text='Cuánto se espera que suban los costos por mes (gasoil, sueldos, hotel…).')
+    proyectar_desde_dias = models.PositiveIntegerField('Proyectar si el viaje sale en más de (días)', default=30,
+        help_text='Si el viaje es más adelante, los costos se llevan a la fecha de salida con la inflación.')
+
     # Word de la cotización
     porcentaje_sena = models.PositiveIntegerField('Seña (%)', default=40)
     vigencia_dias = models.PositiveIntegerField('Vigencia de la cotización (días)', default=7)
@@ -181,6 +187,8 @@ class Cotizacion(models.Model):
     otros_gastos = models.DecimalField('Otros gastos ($)', max_digits=14, decimal_places=2, default=0)
 
     # Precio
+    proyectar_inflacion = models.BooleanField('Proyectar costos por inflación a la fecha del viaje', default=True)
+    inflacion_mensual = models.DecimalField('Inflación mensual (%)', max_digits=6, decimal_places=2, default=D('1.70'))
     tarifa_neta = models.DecimalField('Tarifa final sin IVA', max_digits=16, decimal_places=2)
     costo_total = models.DecimalField(max_digits=16, decimal_places=2, default=0)
     detalle = models.JSONField('Cálculo guardado', default=dict, blank=True)

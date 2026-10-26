@@ -51,6 +51,25 @@ class CalculoTest(TestCase):
         dos = calculo.calcular(p, datos_cot302(cantidad_vehiculos=2))['costo']
         self.assertAlmostEqual(dos, uno * 2, delta=Decimal('0.1'))
 
+    def test_proyeccion_por_inflacion(self):
+        p = Parametros.actuales()
+        hoy = calculo.calcular(p, datos_cot302())
+        # Viaje que sale 90 días después de la cotización: 3 meses al 2% = +6,1%
+        futuro = calculo.calcular(p, datos_cot302(fecha=date(2026, 10, 1), salida=datetime(2026, 12, 30, 7, 0),
+                                                  proyectar_inflacion=True, inflacion_mensual=Decimal(2)))
+        self.assertEqual(futuro['inflacion']['meses'], Decimal('3.0'))
+        self.assertEqual(futuro['inflacion']['porcentaje'], Decimal('6.1'))
+        self.assertEqual(futuro['inflacion']['costo_hoy'], hoy['costo'])
+        self.assertAlmostEqual(futuro['costo'], hoy['costo'] * Decimal('1.061208'), delta=Decimal(1))
+        self.assertGreater(futuro['filas'][1]['total'], hoy['filas'][1]['total'])
+        # Dentro de los 30 días, o con la opción apagada, no se proyecta
+        cerca = datos_cot302(fecha=date(2026, 10, 1), salida=datetime(2026, 10, 20, 7, 0), proyectar_inflacion=True,
+                             inflacion_mensual=Decimal(2))
+        self.assertIsNone(calculo.calcular(p, cerca)['inflacion'])
+        apagado = datos_cot302(fecha=date(2026, 10, 1), salida=datetime(2026, 12, 30, 7, 0), proyectar_inflacion=False,
+                               inflacion_mensual=Decimal(2))
+        self.assertEqual(calculo.calcular(p, apagado)['costo'], hoy['costo'])
+
     def test_sin_km_no_divide_por_cero(self):
         r = calculo.calcular(Parametros.actuales(), datos_cot302(km_servicio=0, km_vacios=0))
         self.assertEqual(r['costo_km'], 0)
@@ -72,7 +91,7 @@ class BaseVistas(TestCase):
             'dias': '1', 'noches': '0', 'vehiculo': self.vehiculo.pk, 'cantidad_vehiculos': '1',
             'descripcion_vehiculo': 'BUS  Piso Elevado 50 pasajeros', 'choferes': '1', 'viaticos_por_chofer': '2',
             'habitaciones': '1', 'incluye_estacionamiento': 'on', 'peaje': '0', 'otros_gastos': '0',
-            'tarifa_neta': '1700000', 'incluye': 'Traslado ida y regreso.\nViáticos de personal.',
+            'inflacion_mensual': '1.70', 'tarifa_neta': '1700000', 'incluye': 'Traslado ida y regreso.\nViáticos de personal.',
             'no_incluye': 'Gastos no especificados & extras.', 'notas_internas': '',
         }
         datos.update(cambios)

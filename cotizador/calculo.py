@@ -2,7 +2,10 @@
 
 Cada ítem se calcula por vehículo y después se multiplica por la cantidad de vehículos.
 """
+from datetime import datetime
 from decimal import ROUND_HALF_UP, Decimal
+
+from django.utils import timezone
 
 CERO = Decimal('0')
 CIEN = Decimal('100')
@@ -24,6 +27,24 @@ def _dec(valor):
     if valor in (None, ''):
         return CERO
     return Decimal(str(valor))
+
+
+def proyeccion(p, datos):
+    """Si el viaje sale más adelante, cuánto subirían los costos hasta esa fecha por inflación.
+    Devuelve None si no corresponde proyectar."""
+    fecha, salida = datos.get('fecha'), datos.get('salida')
+    tasa = _dec(datos.get('inflacion_mensual'))
+    if not datos.get('proyectar_inflacion') or not fecha or not salida or tasa <= 0:
+        return None
+    if isinstance(salida, datetime):
+        salida = timezone.localtime(salida).date() if timezone.is_aware(salida) else salida.date()
+    dias = (salida - fecha).days
+    if dias <= p.proyectar_desde_dias:
+        return None
+    meses = redondear(Decimal(dias) / 30, '0.1')
+    factor = (1 + tasa / CIEN) ** meses
+    return {'dias': dias, 'meses': meses, 'tasa': tasa, 'factor': factor,
+            'porcentaje': redondear((factor - 1) * CIEN, '0.1')}
 
 
 def calcular(p, datos):
@@ -68,6 +89,15 @@ def calcular(p, datos):
         ('Otros gastos', _dec(datos.get('otros_gastos')), ''),
     ]
     items = [{'nombre': n, 'importe': redondear(v * cantidad), 'detalle': d} for n, v, d in items]
+    costo_hoy = sum((i['importe'] for i in items), CERO)
+    inflacion = proyeccion(p, datos)
+    if inflacion:
+        inflacion['costo_hoy'] = costo_hoy
+        items.append({'nombre': 'Ajuste por inflación', 'importe': redondear(costo_hoy * (inflacion['factor'] - 1)),
+                      'detalle': f"{_txt(inflacion['meses'])} meses al {_txt(inflacion['tasa'])}% mensual "
+                                 f"= +{_txt(inflacion['porcentaje'])}% hasta la salida",
+                      'inflacion': True})
+        del inflacion['factor']
     costo = sum((i['importe'] for i in items), CERO)
     costo_km = costo / km_totales if km_totales else CERO
 
@@ -108,6 +138,7 @@ def calcular(p, datos):
         'costo_km': redondear(costo_km),
         'filas': filas,
         'final': final,
+        'inflacion': inflacion,
     }
 
 

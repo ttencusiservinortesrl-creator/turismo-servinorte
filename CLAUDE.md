@@ -27,6 +27,9 @@ PostgreSQL (Supabase) en línea vía `DATABASE_URL`. WhiteNoise sirve los estát
 - Cambiar parámetros no toca las cotizaciones guardadas; al editar y guardar una, se recalcula con los de hoy.
 - Km totales = km en servicio + km vacíos. El mapa carga los km en servicio; se pueden corregir a mano.
 - "usar" en el resumen redondea la tarifa a $10.000.
+- Viajes a futuro: si la salida es más de `proyectar_desde_dias` (30) después de la fecha de la cotización, se
+  agrega el ítem "Ajuste por inflación" = costo de hoy × ((1 + inflación mensual)^(días/30) − 1). Los márgenes se
+  calculan sobre el costo proyectado. La inflación se puede cambiar en cada cotización (por defecto, la de Parámetros).
 - Aceptar una cotización la convierte en venta: crea un cargo automático por el total con IVA, que se
   actualiza solo si cambia el precio. Con pagos o cargos manuales no se puede rechazar ni eliminar.
 - Cuenta corriente del cliente = movimientos de todas sus cotizaciones aceptadas (no hay tabla aparte).

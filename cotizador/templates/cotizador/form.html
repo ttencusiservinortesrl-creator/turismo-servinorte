@@ -84,6 +84,15 @@
             <div class="card shadow-sm mb-3">
                 <div class="card-header">Precio y textos del Word</div>
                 <div class="card-body row g-2">
+                    <div class="col-12 mb-1">
+                        <div class="p-2 rounded-3" style="background: var(--azul-50)">
+                            <div class="row g-2 align-items-end">
+                                {% include '_campo.html' with campo=form.proyectar_inflacion clase='col-md-8' %}
+                                {% include '_campo.html' with campo=form.inflacion_mensual clase='col-md-4' %}
+                                <div class="col-12 form-text mt-0">Si el viaje sale en más de {{ p.proyectar_desde_dias }} días, los costos se llevan a la fecha de salida con esta inflación (se calcula desde la fecha de la cotización).</div>
+                            </div>
+                        </div>
+                    </div>
                     {% include '_campo.html' with campo=form.tarifa_neta clase='col-md-6' %}
                     <div class="col-md-6 small text-muted d-flex align-items-end mb-2">Tocá "usar" en el resumen para tomar un margen (se redondea a $10.000) o escribí el precio.</div>
                     {% include '_campo.html' with campo=form.incluye clase='col-md-6' %}

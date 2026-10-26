@@ -1,4 +1,12 @@
 {% load formato %}
+{% if r.inflacion %}
+<div class="alert alert-info d-flex gap-2 align-items-start">
+    <i class="bi bi-graph-up-arrow fs-5"></i>
+    <div><b>Costos proyectados a la fecha del viaje.</b> Sale en {{ r.inflacion.dias }} días ({{ r.inflacion.meses|pesos:1 }} meses):
+        con {{ r.inflacion.tasa|pesos:2 }}% mensual, los costos suben un <b>{{ r.inflacion.porcentaje|pesos:1 }}%</b>.
+        Costo hoy $ {{ r.inflacion.costo_hoy|pesos }} → a la salida $ {{ r.costo|pesos }}.</div>
+</div>
+{% endif %}
 <div class="card shadow-sm mb-3">
     <div class="card-header d-flex justify-content-between">
         <span>Resumen</span>
@@ -44,7 +52,7 @@
     <table class="table table-sm mb-0">
         <tbody>
         {% for i in r.items %}
-            <tr><td>{{ i.nombre }} <div class="text-muted small">{{ i.detalle }}</div></td><td class="num">$ {{ i.importe|pesos }}</td></tr>
+            <tr{% if i.inflacion %} class="table-info"{% endif %}><td>{{ i.nombre }} <div class="text-muted small">{{ i.detalle }}</div></td><td class="num">$ {{ i.importe|pesos }}</td></tr>
         {% endfor %}
         <tr class="table-secondary fw-semibold"><td>Costo total <span class="fw-normal small">($ {{ r.costo_km|pesos:2 }} por km)</span></td><td class="num">$ {{ r.costo|pesos }}</td></tr>
         </tbody>

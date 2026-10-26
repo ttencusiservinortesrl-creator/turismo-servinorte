@@ -60,6 +60,7 @@ def nueva(request):
             'numero': Cotizacion.proximo_numero(), 'fecha': timezone.localdate(),
             'origen': p.origen_habitual, 'incluye': p.incluye, 'no_incluye': p.no_incluye,
             'cliente': request.GET.get('cliente'),
+            'inflacion_mensual': p.inflacion_mensual,
         }
         base = Cotizacion.objects.filter(pk=request.GET.get('copiar')).first() if request.GET.get('copiar') else None
         if base:
@@ -331,6 +332,7 @@ def parametros(request):
                               'insumos_limpieza']),
         ('Márgenes e IVA', ['margen_minimo', 'margen_intermedio', 'margen_mercado', 'margen_optimo',
                             'precio_referencia_km', 'porcentaje_iva']),
+        ('Viajes a futuro', ['inflacion_mensual', 'proyectar_desde_dias']),
         ('Word de la cotización', ['origen_habitual', 'porcentaje_sena', 'vigencia_dias', 'incluye', 'no_incluye']),
     ]
     grupos = [(titulo, [form[c] for c in campos]) for titulo, campos in grupos]
