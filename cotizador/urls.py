@@ -25,6 +25,7 @@ urlpatterns = [
     path('clientes/<int:pk>/eliminar/', views.cliente_eliminar, name='cliente_eliminar'),
     path('calcular/', views.calcular, name='calcular'),
     path('buscar-km/', views.buscar_km, name='buscar_km'),
+    path('estado-mapa/', views.estado_mapa, name='estado_mapa'),
     path('parametros/', views.parametros, name='parametros'),
     path('vehiculos/', views.vehiculos, name='vehiculos'),
     path('vehiculos/<int:pk>/', views.vehiculos, name='vehiculo_editar'),

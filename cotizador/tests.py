@@ -183,8 +183,7 @@ class VistasTest(BaseVistas):
 
     def test_buscar_km(self):
         def falso_get(url, params=None, **kw):
-            respuesta = mock.Mock()
-            respuesta.raise_for_status = lambda: None
+            respuesta = mock.Mock(status_code=200)
             if 'nominatim' in url:
                 respuesta.json = lambda: [{'display_name': params['q'], 'lat': '-24.8', 'lon': '-65.4'}]
             else:
@@ -197,6 +196,36 @@ class VistasTest(BaseVistas):
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.json()['km'], 543)
         self.assertEqual(Lugar.objects.count(), 2)
+
+    def test_buscar_km_con_respaldo_si_nominatim_y_osrm_fallan(self):
+        """En Render, Nominatim y el OSRM principal pueden rechazar los pedidos: se usan Photon y el otro OSRM."""
+        usados = []
+
+        def falso_get(url, params=None, **kw):
+            usados.append(url.split('/')[2])
+            if 'nominatim' in url or 'project-osrm' in url:
+                return mock.Mock(status_code=403, text='Access blocked')
+            if 'photon' in url:
+                return mock.Mock(status_code=200, json=lambda: {'features': [{
+                    'properties': {'name': 'Metán', 'state': 'Salta', 'country': 'Argentina'},
+                    'geometry': {'coordinates': [-64.97, -25.49]}}]})
+            return mock.Mock(status_code=200, json=lambda: {'code': 'Ok', 'routes': [{'legs': [{'distance': 139000}, {'distance': 139400}]}]})
+
+        with mock.patch.object(rutas.requests, 'get', side_effect=falso_get):
+            r = self.client.post(reverse('cotizador:buscar_km'),
+                                 {'origen': 'Salta, Salta', 'paradas': 'Metán, Salta', 'ida_y_vuelta': 'on'})
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(r.json()['km'], 278)
+        self.assertIn('photon.komoot.io', usados)
+        self.assertIn('routing.openstreetmap.de', usados)
+        self.assertEqual(Lugar.objects.get(busqueda='metán, salta').nombre, 'Metán, Salta, Argentina')
+
+    def test_buscar_km_todo_caido_explica_que_fallo(self):
+        with mock.patch.object(rutas.requests, 'get', side_effect=rutas.requests.ConnectionError('sin red')):
+            r = self.client.post(reverse('cotizador:buscar_km'), {'origen': 'Salta, Salta', 'paradas': 'Metán, Salta'})
+        self.assertEqual(r.status_code, 400)
+        self.assertIn('Nominatim no respondió', r.json()['error'])
+        self.assertIn('cargá los km a mano', r.json()['error'])
 
     def test_buscar_km_sin_destino(self):
         r = self.client.post(reverse('cotizador:buscar_km'), {'origen': 'Salta', 'paradas': ''})

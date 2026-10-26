@@ -1,3 +1,4 @@
+import logging
 from datetime import timedelta
 from decimal import Decimal
 
@@ -16,6 +17,8 @@ from . import calculo, estadisticas as estadisticas_calculo, excel, recibo, ruta
 from .forms import (ClienteForm, CotizacionForm, LineaVehiculoForm, MovimientoForm, ParametrosForm,
                     TipoVehiculoForm, lineas_validas)
 from .models import Cliente, Cotizacion, LineaVehiculo, Movimiento, Parametros, TipoVehiculo
+
+logger = logging.getLogger(__name__)
 
 
 @login_required
@@ -346,6 +349,10 @@ def buscar_km(request):
         recorrido = rutas.calcular_recorrido(origen, paradas, ida_y_vuelta)
     except rutas.ErrorRuta as e:
         return JsonResponse({'error': str(e)}, status=400)
+    except Exception:
+        logger.exception('Error inesperado buscando km')
+        return JsonResponse({'error': 'Hubo un error inesperado al buscar en el mapa. Cargá los km a mano '
+                                      'y avisá para revisarlo.'}, status=500)
     nombres = [origen] + paradas + ([origen] if ida_y_vuelta else [])
     return JsonResponse({
         'km': recorrido['km'],
@@ -353,6 +360,11 @@ def buscar_km(request):
         'itinerario': ' – '.join(nombres) + '.',
         'encontrados': [l.nombre for l in recorrido['lugares']],
     })
+
+
+def estado_mapa(request):
+    """Diagnóstico: si cada servicio de mapas responde desde este servidor (sin datos de la empresa)."""
+    return JsonResponse(rutas.estado_servicios(), json_dumps_params={'ensure_ascii': False})
 
 
 @login_required

@@ -219,7 +219,8 @@
         datos.append('ida_y_vuelta', $('ida_y_vuelta').checked ? 'on' : '');
         try {
             const r = await fetch('{% url "cotizador:buscar_km" %}', {method: 'POST', body: datos, headers: {'X-CSRFToken': csrf}});
-            const j = await r.json();
+            let j;
+            try { j = await r.json(); } catch (_) { j = {error: 'El servidor respondió con un error (código ' + r.status + '). Cargá los km a mano.'}; }
             if (!r.ok) {
                 info.innerHTML = '<div class="alert alert-warning py-2 small">' + j.error + '</div>';
                 return;

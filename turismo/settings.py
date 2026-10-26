@@ -122,7 +122,16 @@ LOGIN_REDIRECT_URL = 'cotizador:lista'
 LOGOUT_REDIRECT_URL = 'login'
 
 # Identificación para los servicios de mapas gratuitos (OpenStreetMap la exige).
-MAPAS_USER_AGENT = os.environ.get('MAPAS_USER_AGENT', 'ServinorteTurismo/1.0 (cotizador de viajes)')
+MAPAS_USER_AGENT = os.environ.get(
+    'MAPAS_USER_AGENT', 'ServinorteTurismo/1.1 (cotizador de viajes; +https://servinorte-turismo.onrender.com)')
+
+# Los errores (por ejemplo, si el mapa no responde) quedan en los registros de Render.
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {'consola': {'class': 'logging.StreamHandler'}},
+    'loggers': {'cotizador': {'handlers': ['consola'], 'level': 'INFO'}},
+}
 
 # Seguridad cuando el sistema está publicado en internet (HTTPS obligatorio).
 if ONLINE:

@@ -1,24 +1,76 @@
-"""Kilómetros por ruta usando los servicios gratuitos de OpenStreetMap.
+"""Kilómetros por ruta usando servicios gratuitos basados en OpenStreetMap.
 
-- Nominatim: busca dónde queda cada lugar (se guarda en la tabla Lugar para no repetir).
-- OSRM: calcula la distancia manejando por ruta entre los lugares, en orden.
+- Buscar dónde queda cada lugar: Nominatim y, si no responde o rechaza el pedido, Photon.
+  Lo encontrado se guarda en la tabla Lugar para no volver a buscarlo.
+- Distancia manejando entre los lugares, en orden: OSRM y, si falla, el OSRM de openstreetmap.de.
+
+Los servicios gratuitos a veces rechazan pedidos que salen de servidores en la nube (como Render);
+por eso hay un respaldo para cada paso y el error dice qué servicio falló.
 """
+import logging
+
 import requests
 from django.conf import settings
 
 from .models import Lugar
 
+logger = logging.getLogger(__name__)
+
 NOMINATIM = 'https://nominatim.openstreetmap.org/search'
-OSRM = 'https://router.project-osrm.org/route/v1/driving/'
+PHOTON = 'https://photon.komoot.io/api/'
+RUTEADORES = [
+    ('OSRM', 'https://router.project-osrm.org/route/v1/driving/'),
+    ('OSRM Alemania', 'https://routing.openstreetmap.de/routed-car/route/v1/driving/'),
+]
 PAISES = 'ar,cl,bo,py,uy,br,pe'
+SUDAMERICA = '-82,-56,-34,13'  # recuadro para que Photon no devuelva lugares de otros continentes
 
 
 class ErrorRuta(Exception):
     pass
 
 
+class _ServicioCaido(Exception):
+    """El servicio no respondió bien (rechazo, error o demora); se prueba el siguiente."""
+
+
 def _headers():
     return {'User-Agent': settings.MAPAS_USER_AGENT, 'Accept-Language': 'es'}
+
+
+def _pedir(nombre, url, params=None, timeout=15):
+    try:
+        r = requests.get(url, params=params, headers=_headers(), timeout=timeout)
+    except requests.RequestException as e:
+        logger.warning('Mapa: %s no respondió: %s', nombre, e)
+        raise _ServicioCaido(f'{nombre} no respondió')
+    if r.status_code != 200:
+        logger.warning('Mapa: %s devolvió %s: %s', nombre, r.status_code, r.text[:200])
+        raise _ServicioCaido(f'{nombre} rechazó el pedido (código {r.status_code})')
+    try:
+        return r.json()
+    except ValueError:
+        logger.warning('Mapa: %s devolvió algo que no es JSON: %s', nombre, r.text[:200])
+        raise _ServicioCaido(f'{nombre} devolvió una respuesta inválida')
+
+
+def _nominatim(consulta):
+    resultados = _pedir('Nominatim', NOMINATIM, {'q': consulta, 'format': 'json', 'limit': 1, 'countrycodes': PAISES})
+    if resultados:
+        res = resultados[0]
+        return res['display_name'], float(res['lat']), float(res['lon'])
+    return None
+
+
+def _photon(consulta):
+    datos = _pedir('Photon', PHOTON, {'q': consulta, 'limit': 1, 'bbox': SUDAMERICA})
+    for f in datos.get('features', []):
+        p = f.get('properties', {})
+        partes = [p.get('name'), p.get('city') or p.get('county'), p.get('state'), p.get('country')]
+        nombre = ', '.join(dict.fromkeys(x for x in partes if x))
+        lon, lat = f['geometry']['coordinates']
+        return nombre, float(lat), float(lon)
+    return None
 
 
 def buscar_lugar(texto):
@@ -27,19 +79,38 @@ def buscar_lugar(texto):
     if lugar:
         return lugar
     intentos = [texto] if 'argentina' in clave else [f'{texto}, Argentina', texto]
-    for consulta in intentos:
+    fallas = []
+    for buscador in (_nominatim, _photon):
         try:
-            r = requests.get(NOMINATIM, params={'q': consulta, 'format': 'json', 'limit': 1,
-                                                'countrycodes': PAISES}, headers=_headers(), timeout=15)
-            r.raise_for_status()
-            resultados = r.json()
-        except (requests.RequestException, ValueError) as e:
-            raise ErrorRuta(f'No se pudo consultar el mapa ({e}). Probá de nuevo en un rato.')
-        if resultados:
-            res = resultados[0]
-            return Lugar.objects.create(busqueda=clave, nombre=res['display_name'][:300],
-                                        lat=float(res['lat']), lon=float(res['lon']))
+            for consulta in intentos:
+                encontrado = buscador(consulta)
+                if encontrado:
+                    nombre, lat, lon = encontrado
+                    return Lugar.objects.create(busqueda=clave, nombre=nombre[:300], lat=lat, lon=lon)
+            # Respondió pero no lo encontró: el otro buscador puede tenerlo con otro nombre.
+        except _ServicioCaido as e:
+            fallas.append(str(e))
+    if len(fallas) == 2:
+        raise ErrorRuta(f'No se pudo consultar el mapa ({"; ".join(fallas)}). Probá de nuevo en un rato '
+                        f'o cargá los km a mano.')
     raise ErrorRuta(f'No encontré "{texto}" en el mapa. Probá escribiéndolo como "Ciudad, Provincia".')
+
+
+def estado_servicios():
+    """Prueba cada servicio con un lugar fijo (Salta → Metán). Solo dice si responde; no usa datos de clientes."""
+    pruebas = {
+        'Nominatim': lambda: _nominatim('Metán, Salta, Argentina'),
+        'Photon': lambda: _photon('Metán, Salta'),
+    }
+    for nombre, url in RUTEADORES:
+        pruebas[nombre] = lambda url=url, nombre=nombre: _pedir(nombre, url + '-65.41,-24.79;-64.97,-25.49', {'overview': 'false'})
+    estado = {}
+    for nombre, prueba in pruebas.items():
+        try:
+            estado[nombre] = 'responde' if prueba() else 'responde pero no encontró el lugar'
+        except _ServicioCaido as e:
+            estado[nombre] = str(e)
+    return estado
 
 
 def calcular_recorrido(origen, paradas, ida_y_vuelta=True):
@@ -51,14 +122,16 @@ def calcular_recorrido(origen, paradas, ida_y_vuelta=True):
         nombres.append(origen)
     lugares = [buscar_lugar(n) for n in nombres]
     coords = ';'.join(f'{l.lon},{l.lat}' for l in lugares)
-    try:
-        r = requests.get(OSRM + coords, params={'overview': 'false'}, headers=_headers(), timeout=20)
-        datos = r.json()
-    except (requests.RequestException, ValueError) as e:
-        raise ErrorRuta(f'No se pudo calcular la ruta ({e}). Probá de nuevo en un rato.')
-    if datos.get('code') != 'Ok' or not datos.get('routes'):
+    fallas = []
+    for nombre, url in RUTEADORES:
+        try:
+            datos = _pedir(nombre, url + coords, {'overview': 'false'}, timeout=20)
+        except _ServicioCaido as e:
+            fallas.append(str(e))
+            continue
+        if datos.get('code') == 'Ok' and datos.get('routes'):
+            tramos = [{'desde': nombres[i], 'hasta': nombres[i + 1], 'km': round(t['distance'] / 1000)}
+                      for i, t in enumerate(datos['routes'][0]['legs'])]
+            return {'km': sum(t['km'] for t in tramos), 'tramos': tramos, 'lugares': lugares}
         raise ErrorRuta('El mapa no encontró un camino por ruta entre esos lugares.')
-    tramos = []
-    for i, tramo in enumerate(datos['routes'][0]['legs']):
-        tramos.append({'desde': nombres[i], 'hasta': nombres[i + 1], 'km': round(tramo['distance'] / 1000)})
-    return {'km': sum(t['km'] for t in tramos), 'tramos': tramos, 'lugares': lugares}
+    raise ErrorRuta(f'No se pudo calcular la ruta ({"; ".join(fallas)}). Probá de nuevo en un rato o cargá los km a mano.')
