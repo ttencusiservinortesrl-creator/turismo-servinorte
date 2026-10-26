@@ -141,13 +141,13 @@ def calcular(p, datos):
         }
 
     filas = [fila('Costo', costo, costo_km)]
-    for nombre, margen in (('Margen mínimo', p.margen_minimo), ('Margen intermedio', p.margen_intermedio),
-                           ('Valor de mercado', p.margen_mercado), ('Margen óptimo', p.margen_optimo)):
+    for nombre, margen in (('Mínimo', p.margen_minimo), ('Intermedio', p.margen_intermedio),
+                           ('Mercado', p.margen_mercado), ('Óptimo', p.margen_optimo)):
         valor_km = redondear(costo_km * (1 + margen / CIEN), '1')
         f = fila(f'{nombre} ({_txt(margen)}%)', valor_km * km_totales, valor_km)
         f['sugerido'] = redondear(f['total'] / 10000, '1') * 10000 if f['total'] else CERO
         filas.append(f)
-    filas.append(fila(f'Referencia ${_txt(p.precio_referencia_km)} por km', p.precio_referencia_km * km_totales,
+    filas.append(fila(f'Ref. ${_txt(p.precio_referencia_km)}/km', p.precio_referencia_km * km_totales,
                       p.precio_referencia_km))
 
     tarifa = _dec(datos.get('tarifa_neta'))

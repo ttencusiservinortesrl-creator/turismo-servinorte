@@ -192,3 +192,7 @@ a:hover { text-decoration: underline; }
 .card-header.d-flex { justify-content: flex-start !important; align-items: center; }
 .card-header.d-flex::before { flex-shrink: 0; }
 .card-header.d-flex > :last-child { margin-left: auto; }
+.nombre-fila { white-space: nowrap; }
+#resultado .table { font-size: .85rem; }
+#resultado .table > :not(caption) > * > * { padding: .45rem .4rem; }
+.nombre-fila .usar-tarifa { font-size: .75rem; box-shadow: none; }

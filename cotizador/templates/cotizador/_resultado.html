@@ -15,32 +15,30 @@
     <div class="table-responsive">
         <table class="table table-sm mb-0 align-middle">
             <thead class="table-light small">
-                <tr><th></th><th class="num">$ por km</th><th class="num">Total s/IVA</th><th class="num">Ganancia</th>
-                    <th class="num">Rent.</th><th class="num">$ por pax</th><th class="num">Con IVA</th>{% if usar %}<th></th>{% endif %}</tr>
+                <tr><th></th><th class="num d-none d-xxl-table-cell">$ por km</th><th class="num">Total s/IVA</th><th class="num">Ganancia</th>
+                    <th class="num">Rent.</th><th class="num">$ por pax</th><th class="num">Con IVA</th></tr>
             </thead>
             <tbody>
             {% for f in r.filas %}
                 <tr{% if forloop.first %} class="table-secondary"{% endif %}>
-                    <td class="small">{{ f.nombre }}</td>
-                    <td class="num">{{ f.valor_km|pesos }}</td>
+                    <td class="small nombre-fila">{% if usar and f.sugerido %}<button type="button" class="btn btn-sm btn-primary usar-tarifa py-0 px-2 me-1" data-valor="{{ f.sugerido }}" title="Usar $ {{ f.sugerido|pesos }} como tarifa final">Usar</button>{% endif %}{{ f.nombre }}</td>
+                    <td class="num d-none d-xxl-table-cell">{{ f.valor_km|pesos }}</td>
                     <td class="num">{{ f.total|pesos }}</td>
                     <td class="num">{{ f.ganancia|pesos }}</td>
                     <td class="num">{{ f.rentabilidad|pesos:1 }}%</td>
                     <td class="num">{{ f.por_pax|pesos }}</td>
                     <td class="num">{{ f.bruto|pesos }}</td>
-                    {% if usar %}<td>{% if f.sugerido %}<button type="button" class="btn btn-sm btn-link p-0 usar-tarifa" data-valor="{{ f.sugerido }}" title="Usar {{ f.sugerido|pesos }} como tarifa">usar</button>{% endif %}</td>{% endif %}
                 </tr>
             {% endfor %}
             {% if r.final %}
                 <tr class="fila-final">
                     <td>Tarifa final</td>
-                    <td class="num">{{ r.final.valor_km|pesos }}</td>
+                    <td class="num d-none d-xxl-table-cell">{{ r.final.valor_km|pesos }}</td>
                     <td class="num">{{ r.final.total|pesos }}</td>
                     <td class="num {% if r.final.perdida %}text-danger{% endif %}">{{ r.final.ganancia|pesos }}</td>
                     <td class="num">{{ r.final.rentabilidad|pesos:1 }}%</td>
                     <td class="num">{{ r.final.por_pax|pesos }}</td>
                     <td class="num">{{ r.final.bruto|pesos }}</td>
-                    {% if usar %}<td></td>{% endif %}
                 </tr>
             {% endif %}
             </tbody>

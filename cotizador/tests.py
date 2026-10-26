@@ -165,7 +165,8 @@ class VistasTest(BaseVistas):
 
     def test_vista_previa(self):
         r = self.client.post(reverse('cotizador:calcular'), self.post_datos())
-        self.assertContains(r, 'Margen mínimo')
+        self.assertContains(r, 'Mínimo (20%)')
+        self.assertContains(r, 'usar-tarifa')
         self.assertContains(r, 'Tarifa final')
 
     def test_parametros_editables(self):
