@@ -228,9 +228,14 @@
             if (!j.conectado) { caja.innerHTML = ''; return; }
             if (j.error) { caja.innerHTML = '<div class="small text-warning-emphasis">Diagrama: ' + j.error + '</div>'; return; }
             const libres = j.unidades.filter(u => u.libre).length;
-            caja.innerHTML = '<div class="small mb-1"><b>Unidades de turismo libres en esas fechas: ' + libres + ' de ' + j.unidades.length + '</b></div>' +
-                j.unidades.map(u => '<span class="chip-unidad ' + (u.libre ? 'libre' : 'ocupada') + '" title="' +
-                    (u.libre ? 'Libre' : u.detalle.replace(/"/g, '&quot;')) + '">' + u.unidad + '</span>').join('');
+            const conTan = j.unidades.filter(u => u.libre && u.tan);
+            const clase = u => !u.libre ? 'ocupada' : (u.tan ? 'tan' : 'libre');
+            const titulo = u => !u.libre ? u.detalle : (u.tan ? u.aviso + ' (igual está disponible)' : 'Libre');
+            caja.innerHTML = '<div class="small mb-1"><b>Unidades de turismo disponibles en esas fechas: ' + libres + ' de ' + j.unidades.length + '</b></div>' +
+                j.unidades.map(u => '<span class="chip-unidad ' + clase(u) + '" title="' + titulo(u).replace(/"/g, '&quot;') + '">' +
+                    u.unidad + (u.libre && u.tan ? ' · TAN' : '') + '</span>').join('') +
+                (conTan.length ? '<div class="small text-warning-emphasis mt-1"><i class="bi bi-exclamation-triangle"></i> Atención: hay salida de TAN para ' +
+                    conTan.map(u => u.unidad + ' (' + u.aviso.replace('Hay salida de TAN el ', '') + ')').join(', ') + '. Si se reserva esa unidad, el TAN se reemplaza por la reserva.</div>' : '');
         } catch (e) { caja.innerHTML = ''; }
     }
     $('salida').addEventListener('change', () => { fechas(); verDisponibilidad(); });

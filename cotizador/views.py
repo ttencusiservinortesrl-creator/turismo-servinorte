@@ -172,9 +172,18 @@ def renglones_diagrama(cot):
 
 
 def _resumen_disponibilidad(disponibilidad):
-    return [{'unidad': u, 'libre': all(t == '' for t in dias.values()),
-             'detalle': ' | '.join(f'{d:%d/%m}: {t or "sin hoja en el diagrama"}' for d, t in dias.items() if t != '')}
-            for u, dias in disponibilidad.items()]
+    """Por unidad: si está disponible todo el viaje, si algún día tiene salida de TAN y el detalle."""
+    resumen = []
+    for u, dias in disponibilidad.items():
+        dias_tan = [d for d, t in dias.items() if dg.estado(t) == 'tan']
+        resumen.append({
+            'unidad': u,
+            'libre': all(dg.estado(t) in ('libre', 'tan') for t in dias.values()),
+            'tan': bool(dias_tan),
+            'aviso': ('Hay salida de TAN el ' + ', '.join(f'{d:%d/%m}' for d in dias_tan)) if dias_tan else '',
+            'detalle': ' | '.join(f'{d:%d/%m}: {t or "sin hoja en el diagrama"}' for d, t in dias.items() if t != ''),
+        })
+    return resumen
 
 
 def _diagrama_para_venta(cot):
@@ -234,6 +243,14 @@ def disponibilidad(request):
     return JsonResponse({'conectado': True, 'unidades': _resumen_disponibilidad(disp)})
 
 
+def _es_oscuro(color):
+    """Para elegir letra blanca o negra sobre el color de la planilla."""
+    if not color:
+        return False
+    r, g, b = (int(color[i:i + 2], 16) for i in (1, 3, 5))
+    return 0.299 * r + 0.587 * g + 0.114 * b < 140
+
+
 @login_required
 def unidades(request):
     """Grilla de las unidades de turismo por día, leída del diagrama."""
@@ -248,10 +265,16 @@ def unidades(request):
                 'mail_cuenta': drive.mail_cuenta(), 'p': p}
     if contexto['conectado']:
         try:
-            disp = drive.diagrama_actual(p).disponibilidad(p.lista_unidades(), desde, hasta)
-            contexto['filas'] = [{'unidad': u, 'dias': [disp[u][d] for d in dias],
-                                  'libres': sum(1 for d in dias if disp[u][d] == '')} for u in p.lista_unidades()]
-            contexto['libres_por_dia'] = [sum(1 for u in p.lista_unidades() if disp[u][d] == '') for d in dias]
+            diagrama = drive.diagrama_actual(p)
+            disp = diagrama.disponibilidad(p.lista_unidades(), desde, hasta)
+            colores = diagrama.colores(p.lista_unidades(), desde, hasta)
+            contexto['filas'] = [{'unidad': u, 'dias': [{'texto': disp[u][d], 'estado': dg.estado(disp[u][d]),
+                                                         'color': colores[u][d], 'oscuro': _es_oscuro(colores[u][d])}
+                                                        for d in dias],
+                                  'libres': sum(1 for d in dias if dg.estado(disp[u][d]) in ('libre', 'tan'))}
+                                 for u in p.lista_unidades()]
+            contexto['libres_por_dia'] = [sum(1 for u in p.lista_unidades() if dg.estado(disp[u][d]) in ('libre', 'tan'))
+                                          for d in dias]
         except (drive.ErrorDrive, dg.ErrorDiagrama) as e:
             contexto['error'] = str(e)
     return render(request, 'cotizador/unidades.html', contexto)

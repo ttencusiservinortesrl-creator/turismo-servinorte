@@ -28,15 +28,15 @@
                 {% csrf_token %}
                 <div class="d-flex flex-wrap gap-2 mb-3">
                     {% for u in unidades_diagrama %}
-                        <label class="unidad-opcion {% if not u.libre %}ocupada{% endif %}" title="{{ u.detalle|default:'Libre' }}">
+                        <label class="unidad-opcion {% if not u.libre %}ocupada{% elif u.tan %}con-tan{% endif %}" title="{% if u.libre and u.tan %}{{ u.aviso }}{% else %}{{ u.detalle|default:'Libre' }}{% endif %}">
                             <input class="form-check-input me-1" type="checkbox" name="unidades" value="{{ u.unidad }}" {% if not u.libre %}disabled{% endif %}>
-                            {{ u.unidad }} <span class="small">{% if u.libre %}libre{% else %}ocupada{% endif %}</span>
+                            {{ u.unidad }} <span class="small">{% if not u.libre %}ocupada{% elif u.tan %}libre · salida TAN{% else %}libre{% endif %}</span>
                         </label>
                     {% endfor %}
                 </div>
                 <button class="btn btn-primary" type="submit" onclick="return confirm('¿Anotar en el diagrama de Drive? Lo van a ver todos los que usan la planilla.');"><i class="bi bi-calendar-plus"></i> Anotar en el diagrama</button>
                 <button type="button" class="btn btn-outline-secondary ms-1" id="cancelar-asignar">Todavía no</button>
-                <span class="small text-muted ms-2">Pasá el mouse por una unidad ocupada para ver qué tiene.</span>
+                <span class="small text-muted ms-2">Pasá el mouse por una unidad para ver qué tiene. Si tiene salida de TAN, al anotar se borra el TAN de esos días y queda la reserva.</span>
             </form>
             </div>
             <script>

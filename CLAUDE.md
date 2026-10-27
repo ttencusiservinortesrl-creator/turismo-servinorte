@@ -48,6 +48,9 @@ PostgreSQL (Supabase) en línea vía `DATABASE_URL`. WhiteNoise sirve los estát
   calculan sobre el costo proyectado. La inflación se puede cambiar en cada cotización (por defecto, la de Parámetros).
 - Aceptar una cotización la convierte en venta: crea un cargo automático por el total con IVA, que se
   actualiza solo si cambia el precio. Con pagos o cargos manuales no se puede rechazar ni eliminar.
+- TAN (Tren a las Nubes): un día que solo dice "TAN" cuenta como disponible, con aviso. Al anotar la reserva,
+  se borra el TAN de esos días (celdas y combinaciones dentro del bloque) y la reserva queda con el estilo blanco
+  de la fila. La grilla de Unidades copia el color de fondo de cada celda de la planilla.
 - Unidades: solo se asignan en ventas aceptadas, preguntando antes (se puede elegir "Todavía no"); nunca pisa
   celdas ocupadas; la app no borra del diagrama (al des-aceptar avisa que hay que borrarlo a mano).
 - Cuenta corriente del cliente = movimientos de todas sus cotizaciones aceptadas (no hay tabla aparte).

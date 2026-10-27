@@ -25,7 +25,7 @@
 {% elif error %}
     <div class="alert alert-warning">{{ error }}</div>
 {% else %}
-    <p class="bajada">Leído del diagrama de Drive (se actualiza cada 2 minutos). Verde: libre. Pasá el mouse por un día ocupado para ver el servicio.</p>
+    <p class="bajada">Leído del diagrama de Drive (se actualiza cada 2 minutos). Los días tomados se ven con el color de la planilla (pasá el mouse para ver el servicio). Verde: libre. Con <i class="bi bi-exclamation-triangle-fill"></i> TAN: hay salida de TAN pero la unidad está disponible; si se reserva, el TAN se reemplaza por la reserva.</p>
     <div class="card">
         <div class="table-responsive">
             <table class="table table-sm align-middle grilla-unidades mb-0">
@@ -38,10 +38,11 @@
                 {% for f in filas %}
                     <tr>
                         <td class="fw-semibold">{{ f.unidad }}</td>
-                        {% for t in f.dias %}
-                            {% if t == '' %}<td class="dia libre" title="Libre"></td>
-                            {% elif t is None %}<td class="dia sin-dato" title="No figura en el diagrama">?</td>
-                            {% else %}<td class="dia ocupado" title="{{ t }}">{{ t|truncatechars:12 }}</td>{% endif %}
+                        {% for d in f.dias %}
+                            {% if d.estado == 'libre' %}<td class="dia libre" title="Libre"></td>
+                            {% elif d.estado == 'tan' %}<td class="dia tan" title="Disponible, pero hay salida de TAN"{% if d.color %} style="background: {{ d.color }} !important"{% endif %}><i class="bi bi-exclamation-triangle-fill"></i> TAN</td>
+                            {% elif d.estado == 'sin_dato' %}<td class="dia sin-dato" title="No figura en el diagrama">?</td>
+                            {% else %}<td class="dia ocupado{% if d.oscuro %} oscuro{% endif %}" title="{{ d.texto }}"{% if d.color %} style="background: {{ d.color }} !important"{% endif %}>{{ d.texto|truncatechars:12 }}</td>{% endif %}
                         {% endfor %}
                         <td class="num">{{ f.libres }}</td>
                     </tr>

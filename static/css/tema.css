@@ -213,3 +213,10 @@ a:hover { text-decoration: underline; }
 
 .costo-excluido td { color: var(--texto-suave); }
 .costo-excluido td.num { text-decoration: line-through; }
+
+.grilla-unidades td.tan { background: #fff4d6 !important; color: #8a5a00; font-weight: 600; }
+.chip-unidad.tan { background: #fff4d6; color: #8a5a00; cursor: help; }
+.unidad-opcion.con-tan { border-color: #f0c869; background: #fffaf0; }
+
+.grilla-unidades td.dia.oscuro { color: #fff !important; }
+.grilla-unidades td.tan { outline: 2px dashed #b07d00; outline-offset: -3px; }

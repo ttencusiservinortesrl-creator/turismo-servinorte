@@ -19,10 +19,34 @@ import openpyxl
 from openpyxl.utils import column_index_from_string, get_column_letter
 
 LIBRE = {'', 'LIBRE'}
+TAN = 'TAN'  # salidas del Tren a las Nubes: la unidad sigue disponible para turismo, pero se avisa
 
 
 class ErrorDiagrama(Exception):
     pass
+
+
+def _partes(texto):
+    return [t.strip().upper() for t in (texto or '').split(' / ') if t.strip()]
+
+
+def es_tan(texto):
+    """True si ese día la unidad solo tiene "TAN" (y quizás "LIBRE")."""
+    partes = _partes(texto)
+    return TAN in partes and all(t in (TAN, 'LIBRE') for t in partes)
+
+
+def disponible(texto):
+    """Libre o solo con salida de TAN (se puede usar, avisando)."""
+    return texto == '' or es_tan(texto)
+
+
+def estado(texto):
+    if texto is None:
+        return 'sin_dato'
+    if texto == '':
+        return 'libre'
+    return 'tan' if es_tan(texto) else 'ocupada'
 
 
 def numero_unidad(valor):
@@ -87,6 +111,25 @@ class Hoja:
         valor = self.ws.cell(*principal).value
         return '' if valor is None else str(valor).strip()
 
+    def color(self, unidad, dia):
+        """Color de fondo de lo que tiene la unidad ese día, como en la planilla ('#E68EE6'), o None."""
+        filas = self.unidades.get(unidad)
+        col = self.columnas.get(dia)
+        if not filas or not col:
+            return None
+        for fila in range(filas[0], filas[1] + 1):
+            principal = self.combinadas.get((fila, col), (fila, col))
+            celda = self.ws.cell(*principal)
+            if celda.value in (None, ''):
+                continue
+            relleno = celda.fill
+            if relleno is not None and relleno.fill_type == 'solid' and relleno.fgColor is not None \
+                    and relleno.fgColor.type == 'rgb' and isinstance(relleno.fgColor.rgb, str):
+                rgb = relleno.fgColor.rgb[-6:].upper()
+                if rgb not in ('FFFFFF', '000000'):
+                    return '#' + rgb
+        return None
+
     def ocupacion(self, unidad, dia):
         """Texto de lo que tiene la unidad ese día ('' si está libre)."""
         filas = self.unidades.get(unidad)
@@ -128,9 +171,14 @@ class Diagrama:
                 resultado[unidad][dia] = hoja.ocupacion(unidad, dia) if hoja else None
         return resultado
 
+    def colores(self, unidades, desde, hasta):
+        dias = [desde + timedelta(days=i) for i in range((hasta - desde).days + 1)]
+        return {u: {d: (self.hoja(d).color(u, d) if self.hoja(d) else None) for d in dias} for u in unidades}
+
     def libres(self, unidades, desde, hasta):
+        """Unidades disponibles todos esos días (libres o solo con TAN)."""
         disp = self.disponibilidad(unidades, desde, hasta)
-        return [u for u in unidades if all(v == '' for v in disp[u].values())]
+        return [u for u in unidades if all(v is not None and disponible(v) for v in disp[u].values())]
 
 
 # ---------- Escritura ----------
@@ -162,12 +210,13 @@ def _celda_xml(ref, estilo, texto):
     return f'<c r="{ref}"{s} t="inlineStr"><is><t xml:space="preserve">{escape(texto)}</t></is></c>'
 
 
-def _poner_celda(xml, fila, col, texto):
+def _poner_celda(xml, fila, col, texto, estilo=None):
+    """Pone el texto en la celda ('' la deja vacía). `estilo` reemplaza el formato que tenía (si se indica)."""
     ref = f'{get_column_letter(col)}{fila}'
     m_fila = re.search(rf'<row\b[^>]*\br="{fila}"[^>]*?(?:/>|>(.*?)</row>)', xml, re.S)
     if not m_fila:
         # La fila no existe: se agrega en orden.
-        nueva = f'<row r="{fila}">{_celda_xml(ref, None, texto)}</row>'
+        nueva = f'<row r="{fila}">{_celda_xml(ref, estilo, texto)}</row>'
         siguiente = None
         for m in re.finditer(r'<row\b[^>]*\br="(\d+)"', xml):
             if int(m.group(1)) > fila:
@@ -179,10 +228,12 @@ def _poner_celda(xml, fila, col, texto):
     fila_xml = m_fila.group(0)
     m_celda = re.search(rf'<c\b[^>]*\br="{ref}"[^>]*?(?:/>|>.*?</c>)', fila_xml, re.S)
     if m_celda:
-        estilo = re.search(r'\bs="(\d+)"', m_celda.group(0))
-        nueva_fila = fila_xml.replace(m_celda.group(0), _celda_xml(ref, estilo and estilo.group(1), texto), 1)
+        if estilo is None:
+            actual = re.search(r'\bs="(\d+)"', m_celda.group(0))
+            estilo = actual and actual.group(1)
+        nueva_fila = fila_xml.replace(m_celda.group(0), _celda_xml(ref, estilo, texto), 1)
     else:
-        nueva_celda = _celda_xml(ref, None, texto)
+        nueva_celda = _celda_xml(ref, estilo, texto)
         if fila_xml.endswith('/>'):
             nueva_fila = fila_xml[:-2] + '>' + nueva_celda + '</row>'
         else:
@@ -207,14 +258,36 @@ def _agregar_combinacion(xml, rango):
     return xml.replace('</sheetData>', f'</sheetData><mergeCells count="1"><mergeCell ref="{rango}"/></mergeCells>', 1)
 
 
+def _estilo_blanco(xml, fila):
+    """Estilo de las celdas vacías de esa fila (el más usado), para que la reserva no quede con el color del TAN."""
+    m_fila = re.search(rf'<row\b[^>]*\br="{fila}"[^>]*?(?:/>|>(.*?)</row>)', xml, re.S)
+    if not m_fila or not m_fila.group(1):
+        return None
+    estilos = re.findall(r'<c\b[^>]*?\bs="(\d+)"[^>]*?/>', m_fila.group(1))
+    return max(set(estilos), key=estilos.count) if estilos else None
+
+
+def _quitar_combinacion(xml, rango):
+    tag = f'<mergeCell ref="{rango}"/>'
+    if tag not in xml:
+        return xml
+    xml = xml.replace(tag, '', 1)
+    m = re.search(r'<mergeCells\b[^>]*count="(\d+)"[^>]*>', xml)
+    if m:
+        xml = xml.replace(m.group(0), m.group(0).replace(f'count="{m.group(1)}"', f'count="{int(m.group(1)) - 1}"'), 1)
+    return xml
+
+
 def anotar(contenido, unidad, desde, hasta, renglones):
     """Escribe un viaje en el diagrama y devuelve el archivo nuevo (bytes).
 
     renglones: hasta 3 textos (cliente, recorrido, detalle). Si dura varios días, cada renglón se combina
     a lo largo de los días (como se hace a mano). Si el viaje cruza de mes, se escribe en las dos hojas.
-    Falla (ErrorDiagrama) si la unidad no está libre en alguno de esos días."""
+    Los días que solo tenían salida de TAN se liberan: se borra el TAN y queda la reserva.
+    Falla (ErrorDiagrama) si la unidad está ocupada con otra cosa en alguno de esos días."""
     diagrama = Diagrama(contenido)
-    ocupados = {d: t for d, t in diagrama.disponibilidad([unidad], desde, hasta)[unidad].items() if t != ''}
+    por_dia = diagrama.disponibilidad([unidad], desde, hasta)[unidad]
+    ocupados = {d: t for d, t in por_dia.items() if t is None or not disponible(t)}
     if ocupados:
         detalle = ', '.join(f'{d:%d/%m}: {t or "sin hoja en el diagrama"}' for d, t in ocupados.items())
         raise ErrorDiagrama(f'La unidad {unidad} no está libre ({detalle}).')
@@ -239,11 +312,30 @@ def anotar(contenido, unidad, desde, hasta, renglones):
         col_desde, col_hasta = hoja.columnas[dias[0]], hoja.columnas[dias[-1]]
         ruta = rutas_hojas[nombre]
         xml = archivos[ruta].decode('utf8')
+
+        # 1) Sacar el TAN (o "LIBRE") de esos días: celdas y combinaciones que haya dentro del bloque.
+        for rango in list(hoja.ws.merged_cells.ranges):
+            if rango.max_row < filas[0] or rango.min_row > filas[1] or rango.max_col < col_desde or rango.min_col > col_hasta:
+                continue
+            if rango.min_col < col_desde or rango.max_col > col_hasta or rango.min_row < filas[0] or rango.max_row > filas[1]:
+                raise ErrorDiagrama(f'La unidad {unidad} tiene una celda combinada que sigue fuera de las fechas del viaje '
+                                    f'({rango.coord}). Corregila a mano en el Excel.')
+            xml = _quitar_combinacion(xml, rango.coord)
+        estilos_blancos = {}
+        for fila in range(filas[0], filas[1] + 1):
+            estilos_blancos[fila] = _estilo_blanco(xml, fila)
+            for col in range(col_desde, col_hasta + 1):
+                valor = hoja.ws.cell(fila, col).value
+                if valor not in (None, ''):
+                    xml = _poner_celda(xml, fila, col, '', estilo=estilos_blancos[fila])
+
+        # 2) Escribir la reserva combinando las celdas de los días del viaje.
         for i, fila in enumerate(range(filas[0], filas[1] + 1)):
             texto = renglones[i] if i < len(renglones) else ''
             if not texto:
                 continue
-            xml = _poner_celda(xml, fila, col_desde, texto)
+            tenia_algo = hoja.ws.cell(fila, col_desde).value not in (None, '')
+            xml = _poner_celda(xml, fila, col_desde, texto, estilo=estilos_blancos[fila] if tenia_algo else None)
             if col_hasta > col_desde:
                 xml = _agregar_combinacion(xml, f'{get_column_letter(col_desde)}{fila}:{get_column_letter(col_hasta)}{fila}')
         archivos[ruta] = xml.encode('utf8')

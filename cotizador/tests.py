@@ -431,6 +431,7 @@ def diagrama_de_prueba():
     """Un diagrama chico con el mismo formato que el real (sin datos reales)."""
     import openpyxl
     from openpyxl.comments import Comment
+    from openpyxl.styles import PatternFill
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
     for mes, dias, fila_fechas in ((10, 31, 2), (11, 30, 1)):
@@ -443,11 +444,13 @@ def diagrama_de_prueba():
             ws.merge_cells(start_row=base + i * 3, start_column=1, end_row=base + i * 3 + 2, end_column=1)
         ws.cell(row=base + 9, column=1, value='REFERENCIAS')
         if mes == 10:
-            ws['E3'] = 'TAN'                                # 61 ocupada el 4/10
+            ws['E3'] = 'TAN'                                # 61 con salida de TAN el 4/10 (disponible)
+            ws['E3'].fill = PatternFill('solid', fgColor='FFE68EE6')
             ws['H3'] = 'MAT'                                # 61 ocupada del 7 al 9/10 (celda combinada)
             ws.merge_cells('H3:J3')
             ws['C4'] = 'LIBRE'                              # "LIBRE" cuenta como libre
             ws['E6'] = 'MANSFIELD'
+            ws['E6'].fill = PatternFill('solid', fgColor='FF8E7CC3')
             ws['E6'].comment = Comment('comentario que no se tiene que perder', 'x')
     salida = io.BytesIO()
     wb.save(salida)
@@ -464,7 +467,14 @@ class DiagramaTest(TestCase):
         self.assertEqual(disp['61'][date(2026, 10, 8)], 'MAT')      # dentro de la combinación
         self.assertEqual(disp['30'][date(2026, 10, 4)], 'MANSFIELD')
         self.assertEqual(d.libres(['61', '30', '15'], date(2026, 10, 1), date(2026, 10, 3)), ['61', '30', '15'])
-        self.assertEqual(d.libres(['61', '30', '15'], date(2026, 10, 4), date(2026, 10, 4)), ['15'])
+        # TAN no quita disponibilidad
+        self.assertEqual(d.libres(['61', '30', '15'], date(2026, 10, 4), date(2026, 10, 4)), ['61', '15'])
+        self.assertEqual(dg.estado(disp['61'][date(2026, 10, 4)]), 'tan')
+        self.assertEqual(dg.estado(disp['61'][date(2026, 10, 8)]), 'ocupada')
+        # Colores como en la planilla
+        colores = d.colores(['61', '30'], date(2026, 10, 4), date(2026, 10, 4))
+        self.assertEqual(colores['61'][date(2026, 10, 4)], '#E68EE6')
+        self.assertEqual(colores['30'][date(2026, 10, 4)], '#8E7CC3')
         # Mes sin hoja: no se puede saber
         self.assertIsNone(d.disponibilidad(['61'], date(2026, 12, 1), date(2026, 12, 1))['61'][date(2026, 12, 1)])
 
@@ -488,9 +498,24 @@ class DiagramaTest(TestCase):
     def test_no_pisa_lo_que_ya_hay(self):
         from . import diagrama as dg
         with self.assertRaisesRegex(dg.ErrorDiagrama, 'no está libre'):
-            dg.anotar(diagrama_de_prueba(), '61', date(2026, 10, 3), date(2026, 10, 5), ['X'])
+            dg.anotar(diagrama_de_prueba(), '61', date(2026, 10, 6), date(2026, 10, 7), ['X'])
         with self.assertRaisesRegex(dg.ErrorDiagrama, 'no está libre'):
             dg.anotar(diagrama_de_prueba(), '61', date(2026, 10, 9), date(2026, 10, 9), ['X'])
+        with self.assertRaisesRegex(dg.ErrorDiagrama, 'no está libre'):
+            dg.anotar(diagrama_de_prueba(), '30', date(2026, 10, 4), date(2026, 10, 4), ['X'])
+
+    def test_al_reservar_reemplaza_el_tan(self):
+        from . import diagrama as dg
+        nuevo = dg.anotar(diagrama_de_prueba(), '61', date(2026, 10, 3), date(2026, 10, 5),
+                          ['CLIENTE TAN', 'SALTA - CACHI - SALTA', 'COT 500'])
+        d = dg.Diagrama(nuevo)
+        disp = d.disponibilidad(['61'], date(2026, 10, 3), date(2026, 10, 5))['61']
+        self.assertTrue(all(t == 'CLIENTE TAN / SALTA - CACHI - SALTA / COT 500' for t in disp.values()))
+        octubre = d.libro['10-2026']
+        self.assertIsNone(octubre['E3'].value)                 # el TAN se borró
+        self.assertIn('D3:F3', [str(r) for r in octubre.merged_cells.ranges])
+        # La reserva no queda con el color rosa del TAN
+        self.assertIsNone(d.colores(['61'], date(2026, 10, 3), date(2026, 10, 3))['61'][date(2026, 10, 3)])
 
 
 class DiagramaVistasTest(BaseVistas):
@@ -514,7 +539,13 @@ class DiagramaVistasTest(BaseVistas):
 
     def test_disponibilidad_y_anotar_venta(self):
         r = self.client.get(reverse('cotizador:disponibilidad') + '?desde=2026-10-04&hasta=2026-10-04')
-        self.assertEqual({u['unidad']: u['libre'] for u in r.json()['unidades']}, {'61': False, '30': False, '15': True})
+        unidades = {u['unidad']: u for u in r.json()['unidades']}
+        self.assertEqual({u: x['libre'] for u, x in unidades.items()}, {'61': True, '30': False, '15': True})
+        self.assertTrue(unidades['61']['tan'])
+        self.assertEqual(unidades['61']['aviso'], 'Hay salida de TAN el 04/10')
+        r = self.client.get(reverse('cotizador:unidades') + '?desde=2026-10-03&hasta=2026-10-05')
+        self.assertContains(r, 'background: #8E7CC3')   # color de la planilla
+        self.assertContains(r, 'dia tan')
 
         datos = self.post_datos(salida='2026-10-20T07:00', regreso='2026-10-21T20:00', dias='2', noches='1')
         self.client.post(reverse('cotizador:nueva'), datos)
