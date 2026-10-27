@@ -65,11 +65,11 @@
                     <thead class="table-light"><tr><th>Fecha</th><th>COT</th><th>Concepto</th><th class="num">Cargo</th><th class="num">Pago</th><th class="num">Saldo</th></tr></thead>
                     <tbody>
                     {% for m, s in movimientos %}
-                        <tr>
+                        <tr{% if m.anulado %} class="mov-anulado"{% endif %}>
                             <td>{{ m.fecha|date:"d/m/Y" }}</td>
                             <td><a href="{% url 'cotizador:detalle' m.cotizacion_id %}">{{ m.cotizacion.numero }}</a></td>
-                            <td class="small">{{ m.concepto }}{% if m.medio %} · {{ m.get_medio_display }}{% endif %}{% if m.referencia %} · {{ m.referencia }}{% endif %}</td>
-                            <td class="num">{% if m.tipo == 'cargo' %}{{ m.importe|pesos }}{% endif %}</td>
+                            <td class="small">{% if m.anulado %}<span class="badge text-bg-danger">ANULADO</span> {% endif %}{{ m.concepto }}{% if m.medio %} · {{ m.get_medio_display }}{% endif %}{% if m.referencia %} · {{ m.referencia }}{% endif %}</td>
+                            <td class="num">{% if m.suma %}{{ m.importe|pesos }}{% endif %}</td>
                             <td class="num text-success">{% if m.tipo == 'pago' %}{{ m.importe|pesos }}{% endif %}</td>
                             <td class="num">{{ s|pesos }}</td>
                         </tr>

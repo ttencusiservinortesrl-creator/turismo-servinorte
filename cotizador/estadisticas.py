@@ -45,6 +45,7 @@ def calcular(desde, hasta):
     aceptadas = [c for c in cotizaciones if c.estado == Cotizacion.ACEPTADA]
     rechazadas = [c for c in cotizaciones if c.estado == Cotizacion.RECHAZADA]
     pendientes = [c for c in cotizaciones if c.estado == Cotizacion.PENDIENTE]
+    anuladas = [c for c in cotizaciones if c.estado == Cotizacion.ANULADA]
     respondidas = len(aceptadas) + len(rechazadas)
     vendido = sum((c.tarifa_neta for c in aceptadas), Decimal(0))
     ganancia = sum((Decimal(c.detalle.get('final', {}).get('ganancia', 0) or 0) for c in aceptadas), Decimal(0))
@@ -52,6 +53,7 @@ def calcular(desde, hasta):
     resumen = {
         'total': len(cotizaciones), 'aceptadas': len(aceptadas), 'rechazadas': len(rechazadas),
         'pendientes': len(pendientes),
+        'anuladas': len(anuladas),
         'tasa_aceptacion': _porcentaje(len(aceptadas), respondidas),
         'cotizado': sum((c.tarifa_neta for c in cotizaciones), Decimal(0)),
         'vendido': vendido, 'ganancia': ganancia,

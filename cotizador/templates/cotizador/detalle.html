@@ -1,6 +1,16 @@
 {% extends 'base.html' %}
 {% load formato %}
 {% block title %}COT {{ cot.numero }}{% endblock %}
+{% block scripts %}
+<script>
+// Anular un pago o cargo: se pide el motivo antes de enviar.
+document.querySelectorAll('.anular-mov').forEach(f => f.addEventListener('submit', (e) => {
+    const motivo = prompt('¿Por qué se anula? (queda registrado)');
+    if (!motivo || !motivo.trim()) { e.preventDefault(); return; }
+    f.querySelector('[name=motivo]').value = motivo.trim();
+}));
+</script>
+{% endblock %}
 {% block content %}
 <div class="encabezado">
     <h1><span class="icono"><i class="bi bi-file-earmark-check"></i></span> COT {{ cot.numero }} – <a class="text-reset" href="{% url 'cotizador:cliente' cot.cliente_id %}">{{ cot.cliente.nombre }}</a>
@@ -8,12 +18,50 @@
     <a class="btn btn-primary" href="{% url 'cotizador:word' cot.pk %}"><i class="bi bi-file-earmark-word"></i> Descargar Word</a>
     <a class="btn btn-outline-secondary" href="{% url 'cotizador:editar' cot.pk %}"><i class="bi bi-pencil"></i> Editar</a>
     <a class="btn btn-outline-secondary" href="{% url 'cotizador:nueva' %}?copiar={{ cot.pk }}"><i class="bi bi-copy"></i> Copiar como nueva</a>
+    {% if cot.estado != 'anulada' %}<button class="btn btn-outline-danger" type="button" data-bs-toggle="collapse" data-bs-target="#anular"><i class="bi bi-x-octagon"></i> {% if cot.estado == 'aceptada' %}Anular venta{% else %}Anular{% endif %}</button>{% endif %}
 </div>
+
+{% if cot.estado != 'anulada' %}
+<div class="collapse mb-3" id="anular">
+    <div class="card border-danger">
+        <div class="card-header text-danger">{% if cot.estado == 'aceptada' %}Anular la venta (el viaje se cancela){% else %}Anular la cotización{% endif %}</div>
+        <div class="card-body">
+            <form method="post" action="{% url 'cotizador:anular' cot.pk %}" class="row g-3" onsubmit="return confirm('¿Anular la COT {{ cot.numero }}? No se puede deshacer.');">
+                {% csrf_token %}
+                <div class="col-12 campo"><label for="motivo-anulacion">Motivo de la anulación</label>
+                    <input class="form-control" id="motivo-anulacion" name="motivo" required maxlength="200" placeholder="Ej.: el cliente canceló el viaje"></div>
+                {% if cot.estado == 'aceptada' %}
+                    <div class="col-12">
+                        <div class="small text-muted mb-1">La deuda de esta venta se anula (queda en la cuenta corriente, tachada).</div>
+                        {% if pagado_para_anular > 0 %}
+                            <div class="fw-semibold mb-1">El cliente ya pagó $ {{ pagado_para_anular|pesos }}. ¿Qué pasa con eso?</div>
+                            <div class="form-check"><input class="form-check-input" type="radio" name="pagado" value="retener" id="retener" checked>
+                                <label class="form-check-label" for="retener">Se retiene como seña (sin reintegro, como dicen las condiciones)</label></div>
+                            <div class="form-check d-flex flex-wrap align-items-center gap-2"><input class="form-check-input" type="radio" name="pagado" value="devolver" id="devolver">
+                                <label class="form-check-label" for="devolver">Se le devuelve al cliente, en</label>
+                                <select class="form-select form-select-sm w-auto" name="medio">{% for valor, nombre in medios %}<option value="{{ valor }}">{{ nombre }}</option>{% endfor %}</select></div>
+                        {% endif %}
+                    </div>
+                    {% if asignaciones %}
+                    <div class="col-12"><div class="form-check"><input class="form-check-input" type="checkbox" name="quitar_diagrama" id="quitar-diagrama" checked>
+                        <label class="form-check-label" for="quitar-diagrama">Quitar del diagrama la unidad {% for a in asignaciones %}{{ a.unidad }}{% if not forloop.last %}, {% endif %}{% endfor %}</label></div></div>
+                    {% endif %}
+                {% endif %}
+                <div class="col-12"><button class="btn btn-danger" type="submit"><i class="bi bi-x-octagon"></i> Confirmar anulación</button>
+                    <button class="btn btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#anular">Cancelar</button></div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 {# Estado: aceptada / rechazada #}
 <div class="card shadow-sm mb-3">
     <div class="card-body d-flex flex-wrap gap-2 align-items-center">
-        {% if cot.estado == 'pendiente' %}
+        {% if cot.estado == 'anulada' %}
+            <span class="me-auto text-danger"><i class="bi bi-x-octagon"></i> <b>ANULADA</b> el {{ cot.anulada_en|date:"d/m/Y H:i" }}{% if cot.anulada_por %} por {{ cot.anulada_por.get_full_name|default:cot.anulada_por.username }}{% endif %} — motivo: {{ cot.motivo_anulacion }}.
+                {% if cot.estado_antes_de_anular == 'aceptada' %}Era una venta: abajo queda su cuenta corriente como historial.{% endif %}</span>
+        {% elif cot.estado == 'pendiente' %}
             <span class="me-auto">¿El cliente respondió?</span>
             <form method="post" action="{% url 'cotizador:cambiar_estado' cot.pk %}">{% csrf_token %}
                 <input type="hidden" name="estado" value="aceptada">
@@ -43,7 +91,7 @@
     </div>
 </div>
 
-{% if cot.estado == 'aceptada' %}
+{% if cot.fue_venta %}
 <div class="card shadow-sm mb-3 border-success">
     <div class="card-header">Cuenta corriente de la venta</div>
     <div class="card-body pb-0">
@@ -52,31 +100,34 @@
             <div><div class="etiqueta">Pagado</div><div class="valor text-success">$ {{ pagado|pesos }}</div></div>
             <div><div class="etiqueta">Saldo</div><div class="valor {% if saldo > 0 %}text-danger{% else %}text-success{% endif %}">$ {{ saldo|pesos }}</div></div>
         </div>
-        {% if falta_sena > 0 %}<div class="alert alert-warning py-2">Falta la seña: el {{ cot.porcentaje_sena }}% son $ {{ sena|pesos }} (faltan $ {{ falta_sena|pesos }}). Sin seña el vehículo no queda reservado.</div>{% endif %}
-        {% if pago_urgente %}<div class="alert alert-danger py-2">El viaje sale el {{ cot.salida|date:"d/m/Y H:i" }} y todavía debe $ {{ saldo|pesos }}. Según las condiciones, tiene que estar pago 72 hs hábiles antes.</div>{% endif %}
-        {% if saldo <= 0 %}<div class="alert alert-success py-2">Venta cobrada por completo.</div>{% endif %}
+        {% if cot.estado == 'aceptada' and falta_sena > 0 %}<div class="alert alert-warning py-2">Falta la seña: el {{ cot.porcentaje_sena }}% son $ {{ sena|pesos }} (faltan $ {{ falta_sena|pesos }}). Sin seña el vehículo no queda reservado.</div>{% endif %}
+        {% if cot.estado == 'aceptada' and pago_urgente %}<div class="alert alert-danger py-2">El viaje sale el {{ cot.salida|date:"d/m/Y H:i" }} y todavía debe $ {{ saldo|pesos }}. Según las condiciones, tiene que estar pago 72 hs hábiles antes.</div>{% endif %}
+        {% if cot.estado == 'aceptada' and saldo <= 0 %}<div class="alert alert-success py-2">Venta cobrada por completo.</div>{% endif %}
     </div>
     <div class="table-responsive">
         <table class="table table-sm align-middle mb-0">
             <thead class="table-light"><tr><th>Fecha</th><th>Concepto</th><th>Medio / comprobante</th><th class="num">Cargo</th><th class="num">Pago</th><th class="num">Saldo</th><th></th></tr></thead>
             <tbody>
             {% for m, s in movimientos %}
-                <tr>
+                <tr{% if m.anulado %} class="mov-anulado"{% endif %}>
                     <td>{{ m.fecha|date:"d/m/Y" }}</td>
-                    <td>{{ m.concepto }}{% if m.automatico %} <i class="bi bi-arrow-repeat text-muted" title="Se actualiza solo si cambia el precio de la cotización"></i>{% endif %}</td>
+                    <td>{{ m.concepto }}{% if m.anulado %} <span class="badge text-bg-danger">ANULADO</span>
+                        <div class="small text-muted">{{ m.motivo_anulacion }}{% if m.anulado_en %} · {{ m.anulado_en|date:"d/m/Y" }}{% endif %}</div>{% endif %}{% if m.automatico and not m.anulado %} <i class="bi bi-arrow-repeat text-muted" title="Se actualiza solo si cambia el precio de la cotización"></i>{% endif %}</td>
                     <td class="small">{% if m.numero_recibo %}Recibo {{ m.numero_recibo }} · {% endif %}{{ m.get_medio_display }}{% if m.referencia %} · {{ m.referencia }}{% endif %}</td>
-                    <td class="num">{% if m.tipo == 'cargo' %}{{ m.importe|pesos }}{% endif %}</td>
+                    <td class="num">{% if m.suma %}{{ m.importe|pesos }}{% endif %}</td>
                     <td class="num text-success">{% if m.tipo == 'pago' %}{{ m.importe|pesos }}{% endif %}</td>
                     <td class="num">{{ s|pesos }}</td>
-                    <td class="text-end text-nowrap">{% if m.tipo == 'pago' %}<a class="btn btn-sm btn-outline-primary py-0 me-1" href="{% url 'cotizador:recibo' m.pk %}" title="Descargar recibo N° {{ m.numero_recibo }}"><i class="bi bi-receipt"></i> Recibo</a>{% endif %}{% if not m.automatico %}
-                        <form class="d-inline" method="post" action="{% url 'cotizador:movimiento_eliminar' m.pk %}" onsubmit="return confirm('¿Borrar este movimiento?');">{% csrf_token %}
-                            <button class="btn btn-sm btn-link text-danger p-0" type="submit" title="Borrar"><i class="bi bi-trash"></i></button>
+                    <td class="text-end text-nowrap">{% if m.tipo == 'pago' %}<a class="btn btn-sm btn-outline-primary py-0 me-1" href="{% url 'cotizador:recibo' m.pk %}" title="Descargar recibo N° {{ m.numero_recibo }}"><i class="bi bi-receipt"></i> Recibo</a>{% endif %}{% if cot.estado == 'aceptada' and not m.automatico and not m.anulado %}
+                        <form class="d-inline anular-mov" method="post" action="{% url 'cotizador:movimiento_anular' m.pk %}">{% csrf_token %}
+                            <input type="hidden" name="motivo">
+                            <button class="btn btn-sm btn-outline-danger py-0" type="submit" title="Anular{% if m.numero_recibo %} el recibo N° {{ m.numero_recibo }}{% endif %}"><i class="bi bi-x-circle"></i> Anular</button>
                         </form>{% endif %}</td>
                 </tr>
             {% endfor %}
             </tbody>
         </table>
     </div>
+    {% if cot.estado == 'aceptada' %}
     <div class="card-body border-top bg-light">
         <div class="fw-semibold mb-2">Cargar un pago, seña o un cargo extra</div>
         <form method="post" action="{% url 'cotizador:movimiento_nuevo' cot.pk %}" class="row g-2 align-items-end">
@@ -91,6 +142,7 @@
                 <span class="small text-muted ms-2">Un "cargo" suma a lo que debe (ej.: km extra, horas de espera). Para un descuento, cargalo como pago con medio "Otro".</span></div>
         </form>
     </div>
+    {% endif %}
 </div>
 {% include 'cotizador/_diagrama_venta.html' %}
 {% endif %}
@@ -131,7 +183,7 @@
                 <hr class="my-2"><span class="text-muted">Calculado con los parámetros vigentes el {{ cot.modificado|date:"d/m/Y H:i" }}{% if cot.creado_por %} · cargó {{ cot.creado_por.get_full_name|default:cot.creado_por.username }}{% endif %}.</span>
             </div>
         </div>
-        {% if cot.estado != 'aceptada' %}
+        {% if not cot.fue_venta %}
         <form method="post" action="{% url 'cotizador:eliminar' cot.pk %}" onsubmit="return confirm('¿Eliminar la cotización {{ cot.numero }}? No se puede deshacer.');">
             {% csrf_token %}
             <button class="btn btn-sm btn-outline-danger" type="submit"><i class="bi bi-trash"></i> Eliminar cotización</button>

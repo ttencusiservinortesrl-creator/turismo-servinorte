@@ -15,7 +15,7 @@
 <div class="row g-3 mb-3">
     <div class="col-6 col-lg-3"><div class="tarjeta-numero">
         <div class="etiqueta">Cotizaciones</div><div class="valor">{{ resumen.total }}</div>
-        <div class="nota">{{ resumen.aceptadas }} aceptadas · {{ resumen.rechazadas }} rechazadas · {{ resumen.pendientes }} pendientes</div>
+        <div class="nota">{{ resumen.aceptadas }} aceptadas · {{ resumen.rechazadas }} rechazadas · {{ resumen.pendientes }} pendientes{% if resumen.anuladas %} · {{ resumen.anuladas }} anuladas{% endif %}</div>
     </div></div>
     <div class="col-6 col-lg-3"><div class="tarjeta-numero">
         <div class="etiqueta">Se aceptan</div><div class="valor">{{ resumen.tasa_aceptacion|pesos:1 }}%</div>

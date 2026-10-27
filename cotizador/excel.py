@@ -58,11 +58,11 @@ def _fila_total(ws, etiqueta, columnas_suma, columnas_pesos):
 
 
 def generar(cliente=None):
-    ventas = Cotizacion.objects.filter(estado=Cotizacion.ACEPTADA).select_related('cliente').order_by('cliente__nombre', 'salida')
+    ventas = Cotizacion.objects.filter(estado__in=Cotizacion.CON_CUENTA).select_related('cliente').order_by('cliente__nombre', 'salida')
     if cliente:
         ventas = ventas.filter(cliente=cliente)
     ventas = list(ventas)
-    movimientos = Movimiento.objects.filter(cotizacion__in=ventas).select_related('cotizacion__cliente') \
+    movimientos = Movimiento.objects.filter(cotizacion__in=ventas, anulado=False).select_related('cotizacion__cliente') \
         .order_by('cotizacion__cliente__nombre', 'fecha', 'id')
 
     wb = Workbook()
@@ -83,12 +83,12 @@ def generar(cliente=None):
     _fila_total(ws, 'TOTAL', (4, 5, 6, 7), (5, 6, 7))
 
     # Ventas
-    ws = _hoja(wb, 'Ventas', ['N° COT', 'Cliente', 'Aceptada', 'Salida', 'Itinerario', 'Total', 'Pagado', 'Saldo'],
-               [9, 30, 12, 12, 48, 16, 16, 16])
+    ws = _hoja(wb, 'Ventas', ['N° COT', 'Cliente', 'Aceptada', 'Salida', 'Itinerario', 'Total', 'Pagado', 'Saldo', 'Estado'],
+               [9, 30, 12, 12, 48, 16, 16, 16, 11])
     for v in ventas:
         cargos, pagos = v.total_cargos(), v.total_pagos()
         ws.append([v.numero, v.cliente.nombre, v.fecha_estado, timezone.localtime(v.salida).date(), v.itinerario,
-                   float(cargos), float(pagos), float(cargos - pagos)])
+                   float(cargos), float(pagos), float(cargos - pagos), v.get_estado_display()])
     _formatear(ws, columnas_pesos=(6, 7, 8), columnas_fecha=(3, 4))
     _fila_total(ws, 'TOTAL', (6, 7, 8), (6, 7, 8))
 
@@ -99,7 +99,7 @@ def generar(cliente=None):
     for m in movimientos:
         if m.cotizacion.cliente_id != actual:
             actual, saldo = m.cotizacion.cliente_id, Decimal(0)
-        cargo = m.importe if m.tipo == Movimiento.CARGO else None
+        cargo = m.importe if m.suma else None
         pago = m.importe if m.tipo == Movimiento.PAGO else None
         saldo += (cargo or 0) - (pago or 0)
         ws.append([m.cotizacion.cliente.nombre, m.fecha, m.cotizacion.numero, m.concepto, m.get_medio_display(), m.referencia,

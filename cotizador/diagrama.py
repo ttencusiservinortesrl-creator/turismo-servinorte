@@ -345,3 +345,52 @@ def anotar(contenido, unidad, desde, hasta, renglones):
         for nombre in orden:
             z.writestr(nombre, archivos[nombre])
     return salida.getvalue()
+
+
+def quitar(contenido, unidad, desde, hasta, cliente):
+    """Borra del diagrama una reserva anotada por la app (deja esos días vacíos).
+
+    Solo la borra si cada día sigue empezando con el nombre del cliente, tal como la escribió la app;
+    si alguien la cambió a mano, no toca nada y avisa (ErrorDiagrama)."""
+    diagrama = Diagrama(contenido)
+    por_dia = diagrama.disponibilidad([unidad], desde, hasta)[unidad]
+    distintos = {d: t for d, t in por_dia.items() if not t or _partes(t)[0] != cliente.strip().upper()}
+    if distintos:
+        detalle = ', '.join(f'{d:%d/%m}: {t or "vacío"}' for d, t in distintos.items())
+        raise ErrorDiagrama(f'En el diagrama la unidad {unidad} ya no tiene la reserva tal como la anotó la app ({detalle}). '
+                            f'Borrala a mano en el Excel.')
+
+    with zipfile.ZipFile(io.BytesIO(contenido)) as z:
+        archivos = {n: z.read(n) for n in z.namelist()}
+        orden = z.namelist()
+    rutas_hojas = _hojas_xml(archivos)
+    por_hoja = {}
+    dia = desde
+    while dia <= hasta:
+        por_hoja.setdefault(nombre_hoja(dia), []).append(dia)
+        dia += timedelta(days=1)
+
+    for nombre, dias in por_hoja.items():
+        hoja = diagrama.hoja(dias[0])
+        filas = hoja.unidades[unidad]
+        col_desde, col_hasta = hoja.columnas[dias[0]], hoja.columnas[dias[-1]]
+        ruta = rutas_hojas[nombre]
+        xml = archivos[ruta].decode('utf8')
+        for rango in list(hoja.ws.merged_cells.ranges):
+            if rango.max_row < filas[0] or rango.min_row > filas[1] or rango.max_col < col_desde or rango.min_col > col_hasta:
+                continue
+            if rango.min_col < col_desde or rango.max_col > col_hasta or rango.min_row < filas[0] or rango.max_row > filas[1]:
+                raise ErrorDiagrama(f'La reserva de la unidad {unidad} está combinada con celdas de otros días ({rango.coord}). '
+                                    f'Borrala a mano en el Excel.')
+            xml = _quitar_combinacion(xml, rango.coord)
+        for fila in range(filas[0], filas[1] + 1):
+            for col in range(col_desde, col_hasta + 1):
+                if hoja.ws.cell(fila, col).value not in (None, ''):
+                    xml = _poner_celda(xml, fila, col, '')
+        archivos[ruta] = xml.encode('utf8')
+
+    salida = io.BytesIO()
+    with zipfile.ZipFile(salida, 'w', zipfile.ZIP_DEFLATED) as z:
+        for nombre in orden:
+            z.writestr(nombre, archivos[nombre])
+    return salida.getvalue()

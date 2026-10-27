@@ -160,12 +160,12 @@ class Cliente(models.Model):
 
     def saldo(self):
         """Lo que debe en total por sus viajes aceptados (positivo = nos debe)."""
-        return sum((c.saldo() for c in self.cotizaciones.filter(estado=Cotizacion.ACEPTADA)), Decimal(0))
+        return sum((c.saldo() for c in self.cotizaciones.filter(estado__in=Cotizacion.CON_CUENTA)), Decimal(0))
 
 
 class Cotizacion(models.Model):
-    PENDIENTE, ACEPTADA, RECHAZADA = 'pendiente', 'aceptada', 'rechazada'
-    ESTADOS = [(PENDIENTE, 'Pendiente'), (ACEPTADA, 'Aceptada'), (RECHAZADA, 'Rechazada')]
+    PENDIENTE, ACEPTADA, RECHAZADA, ANULADA = 'pendiente', 'aceptada', 'rechazada', 'anulada'
+    ESTADOS = [(PENDIENTE, 'Pendiente'), (ACEPTADA, 'Aceptada'), (RECHAZADA, 'Rechazada'), (ANULADA, 'Anulada')]
 
     numero = models.PositiveIntegerField('N° de cotización', unique=True)
     fecha = models.DateField('Fecha')
@@ -173,6 +173,10 @@ class Cotizacion(models.Model):
     estado = models.CharField(max_length=10, choices=ESTADOS, default=PENDIENTE)
     fecha_estado = models.DateField('Fecha de aceptación / rechazo', null=True, blank=True)
     motivo_rechazo = models.CharField('Motivo del rechazo', max_length=200, blank=True)
+    anulada_en = models.DateTimeField('Anulada el', null=True, blank=True)
+    anulada_por = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    motivo_anulacion = models.CharField('Motivo de la anulación', max_length=200, blank=True)
+    estado_antes_de_anular = models.CharField(max_length=10, blank=True)
 
     # Recorrido
     origen = models.CharField(max_length=120)
@@ -239,6 +243,10 @@ class Cotizacion(models.Model):
     def km_totales(self):
         return (self.km_servicio or 0) + (self.km_vacios or 0)
 
+    @property
+    def fue_venta(self):
+        return self.estado == self.ACEPTADA or (self.estado == self.ANULADA and self.estado_antes_de_anular == self.ACEPTADA)
+
     @classmethod
     def proximo_numero(cls):
         ultimo = cls.objects.aggregate(m=models.Max('numero'))['m']
@@ -262,10 +270,12 @@ class Cotizacion(models.Model):
         return int(self.detalle.get('parametros', {}).get('Seña (%)', 40))
 
     def total_cargos(self):
-        return self.movimientos.filter(tipo=Movimiento.CARGO).aggregate(t=models.Sum('importe'))['t'] or D(0)
+        """Lo que suma a la deuda (cargos y devoluciones al cliente), sin los anulados."""
+        return self.movimientos.filter(tipo__in=Movimiento.SUMAN, anulado=False).aggregate(
+            t=models.Sum('importe'))['t'] or D(0)
 
     def total_pagos(self):
-        return self.movimientos.filter(tipo=Movimiento.PAGO).aggregate(t=models.Sum('importe'))['t'] or D(0)
+        return self.movimientos.filter(tipo=Movimiento.PAGO, anulado=False).aggregate(t=models.Sum('importe'))['t'] or D(0)
 
     def saldo(self):
         return Decimal(self.total_cargos() - self.total_pagos()).quantize(Decimal('0.01'))
@@ -277,7 +287,7 @@ class Cotizacion(models.Model):
         """Al aceptar (o al cambiar el precio de una aceptada) el cargo del servicio sigue al total con IVA."""
         if self.estado != self.ACEPTADA:
             return
-        cargo = self.movimientos.filter(automatico=True).first()
+        cargo = self.movimientos.filter(automatico=True, anulado=False).first()
         concepto = f'Servicio COT {self.numero} (total con IVA)'
         if cargo:
             if cargo.importe != self.total_con_iva or cargo.concepto != concepto:
@@ -287,6 +297,9 @@ class Cotizacion(models.Model):
         else:
             Movimiento.objects.create(cotizacion=self, fecha=self.fecha_estado or self.fecha, tipo=Movimiento.CARGO,
                                       concepto=concepto, importe=self.total_con_iva, automatico=True)
+
+
+Cotizacion.CON_CUENTA = [Cotizacion.ACEPTADA, Cotizacion.ANULADA]  # las anuladas guardan su historial de pagos
 
 
 class LineaVehiculo(models.Model):
@@ -327,13 +340,15 @@ class AsignacionUnidad(models.Model):
 
 class Movimiento(models.Model):
     """Cuenta corriente de una venta: cargos (lo que debe) y pagos (lo que pagó)."""
-    CARGO, PAGO = 'cargo', 'pago'
+    CARGO, PAGO, DEVOLUCION = 'cargo', 'pago', 'devolucion'
+    SUMAN = [CARGO, DEVOLUCION]  # suman a lo que debe el cliente
     MEDIOS = [('efectivo', 'Efectivo'), ('transferencia', 'Transferencia'), ('cheque', 'Cheque'),
               ('tarjeta', 'Tarjeta'), ('otro', 'Otro')]
 
     cotizacion = models.ForeignKey(Cotizacion, on_delete=models.PROTECT, related_name='movimientos')
     fecha = models.DateField()
-    tipo = models.CharField(max_length=10, choices=[(CARGO, 'Cargo (suma a la deuda)'), (PAGO, 'Pago / seña')])
+    tipo = models.CharField(max_length=10, choices=[(CARGO, 'Cargo (suma a la deuda)'), (PAGO, 'Pago / seña'),
+                                                   (DEVOLUCION, 'Devolución al cliente')])
     concepto = models.CharField(max_length=200)
     importe = models.DecimalField(max_digits=16, decimal_places=2)
     medio = models.CharField('Medio de pago', max_length=20, choices=MEDIOS, blank=True)
@@ -341,6 +356,10 @@ class Movimiento(models.Model):
         help_text='N° de recibo, factura, transferencia o cheque.')
     automatico = models.BooleanField(default=False, editable=False)
     numero_recibo = models.PositiveIntegerField('N° de recibo', null=True, blank=True, unique=True, editable=False)
+    anulado = models.BooleanField(default=False)
+    anulado_en = models.DateTimeField(null=True, blank=True)
+    anulado_por = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    motivo_anulacion = models.CharField('Motivo de la anulación', max_length=200, blank=True)
     creado = models.DateTimeField(auto_now_add=True)
     creado_por = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
 
@@ -351,6 +370,10 @@ class Movimiento(models.Model):
 
     def __str__(self):
         return f'{self.get_tipo_display()} {self.importe} – {self.concepto}'
+
+    @property
+    def suma(self):
+        return self.tipo in self.SUMAN
 
     def save(self, *args, **kwargs):
         # Cada pago lleva su número de recibo correlativo.

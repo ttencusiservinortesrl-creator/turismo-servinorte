@@ -582,3 +582,116 @@ class DiagramaVistasTest(BaseVistas):
             self.assertContains(self.client.get(reverse('cotizador:unidades')), 'Conectar el diagrama de Drive')
             r = self.client.get(reverse('cotizador:disponibilidad') + '?desde=2026-10-04')
             self.assertEqual(r.json()['conectado'], False)
+
+
+class AnulacionTest(BaseVistas):
+    def venta_con_pago(self, pago='800000'):
+        self.client.post(reverse('cotizador:nueva'), self.post_datos())
+        cot = Cotizacion.objects.get()
+        self.client.post(reverse('cotizador:cambiar_estado', args=[cot.pk]), {'estado': 'aceptada'})
+        if pago:
+            self.client.post(reverse('cotizador:movimiento_nuevo', args=[cot.pk]),
+                             {'fecha': '2026-10-25', 'tipo': 'pago', 'concepto': 'Seña', 'importe': pago, 'medio': 'efectivo'})
+        return cot
+
+    def test_anular_cotizacion_pendiente(self):
+        self.client.post(reverse('cotizador:nueva'), self.post_datos())
+        cot = Cotizacion.objects.get()
+        # Sin motivo no se anula
+        self.client.post(reverse('cotizador:anular', args=[cot.pk]), {'motivo': ''})
+        cot.refresh_from_db()
+        self.assertEqual(cot.estado, Cotizacion.PENDIENTE)
+        self.client.post(reverse('cotizador:anular', args=[cot.pk]), {'motivo': 'Se cargó dos veces'})
+        cot.refresh_from_db()
+        self.assertEqual((cot.estado, cot.motivo_anulacion), (Cotizacion.ANULADA, 'Se cargó dos veces'))
+        self.assertContains(self.client.get(reverse('cotizador:detalle', args=[cot.pk])), 'ANULADA')
+        self.assertContains(self.client.get(reverse('cotizador:lista') + '?estado=anulada'), 'Mauricio Vivas')
+        # Una anulada no vuelve a cambiar de estado por los botones comunes
+        self.client.post(reverse('cotizador:cambiar_estado', args=[cot.pk]), {'estado': 'aceptada'})
+        cot.refresh_from_db()
+        self.assertEqual(cot.estado, Cotizacion.ANULADA)
+
+    def test_anular_venta_reteniendo_la_sena(self):
+        cot = self.venta_con_pago()
+        self.client.post(reverse('cotizador:anular', args=[cot.pk]), {'motivo': 'Canceló el viaje', 'pagado': 'retener'})
+        cot.refresh_from_db()
+        self.assertEqual(cot.estado, Cotizacion.ANULADA)
+        self.assertEqual(cot.estado_antes_de_anular, Cotizacion.ACEPTADA)
+        self.assertEqual(cot.saldo(), 0)
+        self.assertTrue(cot.movimientos.get(automatico=True).anulado)
+        retenida = cot.movimientos.get(concepto__startswith='Seña retenida')
+        self.assertEqual(retenida.importe, Decimal('800000'))
+        # Sale de "Ventas y saldos", queda el historial en el detalle y en la cuenta del cliente
+        self.assertNotContains(self.client.get(reverse('cotizador:ventas') + '?filtro=todas'), 'Mauricio Vivas')
+        r = self.client.get(reverse('cotizador:detalle', args=[cot.pk]))
+        self.assertContains(r, 'Seña retenida')
+        self.assertNotContains(r, 'Cargar un pago')
+        self.assertContains(self.client.get(reverse('cotizador:cliente', args=[cot.cliente_id])), 'Seña retenida')
+        # No se puede eliminar
+        self.client.post(reverse('cotizador:eliminar', args=[cot.pk]))
+        self.assertTrue(Cotizacion.objects.filter(pk=cot.pk).exists())
+
+    def test_anular_venta_devolviendo(self):
+        cot = self.venta_con_pago()
+        self.client.post(reverse('cotizador:anular', args=[cot.pk]),
+                         {'motivo': 'Canceló con tiempo', 'pagado': 'devolver', 'medio': 'transferencia'})
+        devolucion = cot.movimientos.get(tipo=Movimiento.DEVOLUCION)
+        self.assertEqual((devolucion.importe, devolucion.medio), (Decimal('800000'), 'transferencia'))
+        self.assertEqual(cot.saldo(), 0)
+
+    def test_anular_pago_y_recibo(self):
+        cot = self.venta_con_pago()
+        pago = cot.movimientos.get(tipo=Movimiento.PAGO)
+        saldo_antes = cot.saldo()
+        self.client.post(reverse('cotizador:movimiento_anular', args=[pago.pk]), {'motivo': 'Transferencia rechazada'})
+        pago.refresh_from_db()
+        self.assertTrue(pago.anulado)
+        self.assertEqual(pago.numero_recibo, 1)              # el número no se pierde
+        self.assertEqual(cot.saldo(), saldo_antes + Decimal('800000'))
+        xml = zipfile.ZipFile(io.BytesIO(self.client.get(reverse('cotizador:recibo', args=[pago.pk])).content)).read(
+            'word/document.xml').decode()
+        self.assertIn('ANULADO', xml)
+        self.assertIn('Transferencia rechazada', xml)
+        self.assertContains(self.client.get(reverse('cotizador:detalle', args=[cot.pk])), 'ANULADO')
+        # El siguiente pago sigue la numeración
+        self.client.post(reverse('cotizador:movimiento_nuevo', args=[cot.pk]),
+                         {'fecha': '2026-10-26', 'tipo': 'pago', 'concepto': 'Seña', 'importe': '800000', 'medio': 'transferencia'})
+        self.assertEqual(cot.movimientos.filter(tipo=Movimiento.PAGO).order_by('-numero_recibo').first().numero_recibo, 2)
+        # Excel sin el anulado
+        import openpyxl
+        wb = openpyxl.load_workbook(io.BytesIO(self.client.get(reverse('cotizador:cuentas_excel')).content))
+        self.assertEqual(wb['Resumen por cliente']['F2'].value, 800000)
+
+
+class AnulacionDiagramaTest(DiagramaVistasTest):
+    def test_quitar_del_diagrama_y_anular(self):
+        datos = self.post_datos(salida='2026-10-20T07:00', regreso='2026-10-21T20:00', dias='2', noches='1')
+        self.client.post(reverse('cotizador:nueva'), datos)
+        cot = Cotizacion.objects.get()
+        self.client.post(reverse('cotizador:cambiar_estado', args=[cot.pk]), {'estado': 'aceptada'})
+        self.client.post(reverse('cotizador:anotar_diagrama', args=[cot.pk]), {'unidades': ['61']})
+        asignacion = cot.asignaciones.get()
+        from . import diagrama as dg
+
+        def texto_dia():
+            with open(self.archivo, 'rb') as f:
+                return dg.Diagrama(f.read()).disponibilidad(['61'], date(2026, 10, 20), date(2026, 10, 20))['61'][date(2026, 10, 20)]
+
+        self.assertTrue(texto_dia().startswith('MAURICIO VIVAS'))
+        self.client.post(reverse('cotizador:quitar_unidad', args=[asignacion.pk]))
+        self.assertEqual(texto_dia(), '')
+        self.assertFalse(cot.asignaciones.exists())
+
+        # Se vuelve a anotar y se anula la venta quitando del diagrama
+        self.client.post(reverse('cotizador:anotar_diagrama', args=[cot.pk]), {'unidades': ['61']})
+        self.client.post(reverse('cotizador:anular', args=[cot.pk]), {'motivo': 'Cancelado', 'quitar_diagrama': 'on'})
+        cot.refresh_from_db()
+        self.assertEqual(cot.estado, Cotizacion.ANULADA)
+        self.assertEqual(texto_dia(), '')
+
+    def test_no_quita_si_la_cambiaron_a_mano(self):
+        from . import diagrama as dg
+        with open(self.archivo, 'rb') as f:
+            contenido = dg.anotar(f.read(), '61', date(2026, 10, 20), date(2026, 10, 20), ['OTRO CLIENTE'])
+        with self.assertRaisesRegex(dg.ErrorDiagrama, 'Borrala a mano'):
+            dg.quitar(contenido, '61', date(2026, 10, 20), date(2026, 10, 20), 'Mauricio Vivas')

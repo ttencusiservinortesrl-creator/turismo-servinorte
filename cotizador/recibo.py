@@ -72,7 +72,11 @@ def generar(mov):
     cuerpo = [
         _parrafo(_run(f'Salta, {fecha.day} de {MESES[fecha.month - 1]} {fecha.year}'), alineacion='right', despues=200),
         _parrafo(_run(f'RECIBO N° {mov.numero_recibo:06d}', negrita=True, tamano=30, color=AZUL), alineacion='center', despues=60),
-        _parrafo(_run('Documento no válido como factura', tamano=16, color='6B7487'), alineacion='center', despues=300),
+        _parrafo(_run('Documento no válido como factura', tamano=16, color='6B7487'), alineacion='center',
+                 despues=120 if mov.anulado else 300),
+        *([_parrafo(_run(f'*** ANULADO el {mov.anulado_en:%d/%m/%Y} — {mov.motivo_anulacion} ***' if mov.anulado_en
+                         else '*** ANULADO ***', negrita=True, tamano=26, color='C00000'), alineacion='center', despues=300)]
+          if mov.anulado else []),
         _parrafo(_run('Recibimos de '), _run(datos_cliente, negrita=True), _run(' la suma de '),
                  _run(pesos_en_letras(mov.importe), negrita=True), _run(f' ($ {pesos(mov.importe)}).'), despues=200),
         _tabla([

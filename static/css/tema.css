@@ -220,3 +220,7 @@ a:hover { text-decoration: underline; }
 
 .grilla-unidades td.dia.oscuro { color: #fff !important; }
 .grilla-unidades td.tan { outline: 2px dashed #b07d00; outline-offset: -3px; }
+
+.estado-anulada { background: #fde7e7; color: #8f1d1d; text-decoration: line-through; }
+.mov-anulado td { color: var(--texto-suave); }
+.mov-anulado td.num { text-decoration: line-through; }

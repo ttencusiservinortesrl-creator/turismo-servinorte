@@ -53,6 +53,11 @@ PostgreSQL (Supabase) en línea vía `DATABASE_URL`. WhiteNoise sirve los estát
   de la fila. La grilla de Unidades copia el color de fondo de cada celda de la planilla.
 - Unidades: solo se asignan en ventas aceptadas, preguntando antes (se puede elegir "Todavía no"); nunca pisa
   celdas ocupadas; la app no borra del diagrama (al des-aceptar avisa que hay que borrarlo a mano).
+- Anulaciones (nada se borra): cotización → estado ANULADA con motivo/fecha/usuario (`estado_antes_de_anular`).
+  Venta anulada: sus cargos quedan `anulado=True`; lo pagado se retiene (cargo "Seña retenida") o se devuelve
+  (movimiento DEVOLUCION, suma como un cargo); el saldo queda en 0. Pagos anulados conservan el N° de recibo y el
+  recibo sale con "ANULADO". `Cotizacion.CON_CUENTA` = aceptadas + anuladas (para historial y Excel).
+  "Quitar del diagrama" borra la reserva solo si cada día sigue empezando con el nombre del cliente.
 - Cuenta corriente del cliente = movimientos de todas sus cotizaciones aceptadas (no hay tabla aparte).
 - En la cotización se elige un cliente o se escribe uno nuevo (se crea la ficha; si el nombre ya existe, se reutiliza).
 - Parámetros y vehículos requieren permiso (`change_parametros`, `change_tipovehiculo`); el resto, login.

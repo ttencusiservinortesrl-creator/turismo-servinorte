@@ -132,7 +132,8 @@ def _con_saldo_acumulado(movimientos):
     saldo = Decimal(0)
     filas = []
     for m in movimientos:
-        saldo += m.importe if m.tipo == Movimiento.CARGO else -m.importe
+        if not m.anulado:
+            saldo += m.importe if m.suma else -m.importe
         filas.append((m, saldo))
     return filas
 
@@ -141,7 +142,7 @@ def _con_saldo_acumulado(movimientos):
 def detalle(request, pk):
     cot = get_object_or_404(Cotizacion.objects.select_related('creado_por', 'cliente').prefetch_related('lineas__vehiculo'), pk=pk)
     contexto = {'cot': cot, 'r': cot.detalle}
-    if cot.estado == Cotizacion.ACEPTADA:
+    if cot.fue_venta:
         pagado = cot.total_pagos()
         saldo = cot.saldo()
         contexto.update({
@@ -151,7 +152,13 @@ def detalle(request, pk):
             'pago_urgente': saldo > 0 and cot.salida - timezone.now() < timedelta(hours=72),
             'mov_form': MovimientoForm(initial={'fecha': timezone.localdate(), 'tipo': Movimiento.PAGO}),
         })
-        contexto.update(_diagrama_para_venta(cot))
+        if cot.estado == Cotizacion.ACEPTADA:
+            contexto.update(_diagrama_para_venta(cot))
+        else:
+            contexto['asignaciones'] = list(cot.asignaciones.all())
+    if cot.estado != Cotizacion.ANULADA:
+        contexto['pagado_para_anular'] = cot.total_pagos() if cot.estado == Cotizacion.ACEPTADA else 0
+        contexto['medios'] = Movimiento.MEDIOS
     return render(request, 'cotizador/detalle.html', contexto)
 
 
@@ -286,11 +293,11 @@ def unidades(request):
 def cambiar_estado(request, pk):
     cot = get_object_or_404(Cotizacion, pk=pk)
     nuevo = request.POST.get('estado')
-    if nuevo not in dict(Cotizacion.ESTADOS) or nuevo == cot.estado:
+    if nuevo not in dict(Cotizacion.ESTADOS) or nuevo == cot.estado or Cotizacion.ANULADA in (nuevo, cot.estado):
         return redirect('cotizador:detalle', pk)
     if cot.estado == Cotizacion.ACEPTADA:
-        if cot.movimientos.filter(automatico=False).exists():
-            messages.error(request, 'Esta venta ya tiene pagos o cargos cargados. Borralos primero de la cuenta corriente.')
+        if cot.movimientos.filter(automatico=False, anulado=False).exists():
+            messages.error(request, 'Esta venta ya tiene pagos o cargos cargados. Si el viaje se cancela, usá "Anular venta".')
             return redirect('cotizador:detalle', pk)
         cot.movimientos.filter(automatico=True).delete()
     asignadas = [a.unidad for a in cot.asignaciones.all()]
@@ -321,7 +328,7 @@ def movimiento_nuevo(request, pk):
         if mov.tipo == Movimiento.CARGO:
             mov.medio = ''
         mov.save()
-        nombre = 'Pago' if mov.tipo == Movimiento.PAGO else 'Cargo'
+        nombre = {Movimiento.PAGO: 'Pago', Movimiento.CARGO: 'Cargo', Movimiento.DEVOLUCION: 'Devolución'}[mov.tipo]
         messages.success(request, f'{nombre} de $ {round(mov.importe):,} cargado.'.replace(',', '.'))
     else:
         errores = ' '.join(e for lista_errores in form.errors.values() for e in lista_errores)
@@ -341,12 +348,87 @@ def descargar_recibo(request, pk):
 
 @login_required
 @require_POST
-def movimiento_eliminar(request, pk):
-    mov = get_object_or_404(Movimiento, pk=pk, automatico=False)
-    cot_pk = mov.cotizacion_id
-    mov.delete()
-    messages.success(request, 'Movimiento eliminado.')
-    return redirect('cotizador:detalle', cot_pk)
+def movimiento_anular(request, pk):
+    """Anula un pago o cargo: queda en la cuenta (tachado, con su recibo marcado ANULADO) pero no suma ni resta."""
+    mov = get_object_or_404(Movimiento, pk=pk, automatico=False, anulado=False,
+                            cotizacion__estado=Cotizacion.ACEPTADA)
+    motivo = request.POST.get('motivo', '').strip()
+    if not motivo:
+        messages.error(request, 'Escribí el motivo de la anulación.')
+        return redirect('cotizador:detalle', mov.cotizacion_id)
+    mov.anulado, mov.anulado_en, mov.anulado_por, mov.motivo_anulacion = True, timezone.now(), request.user, motivo[:200]
+    mov.save()
+    que = f'Recibo N° {mov.numero_recibo}' if mov.numero_recibo else mov.get_tipo_display().split(' (')[0]
+    messages.success(request, f'{que} anulado. Ya no cuenta en el saldo.')
+    return redirect('cotizador:detalle', mov.cotizacion_id)
+
+
+@login_required
+@require_POST
+@transaction.atomic
+def anular_cotizacion(request, pk):
+    """Anula una cotización. Si era una venta: anula su deuda y decide qué pasa con lo pagado."""
+    cot = get_object_or_404(Cotizacion.objects.select_related('cliente'), pk=pk)
+    if cot.estado == Cotizacion.ANULADA:
+        return redirect('cotizador:detalle', pk)
+    motivo = request.POST.get('motivo', '').strip()
+    if not motivo:
+        messages.error(request, 'Escribí el motivo de la anulación.')
+        return redirect('cotizador:detalle', pk)
+    avisos = []
+    if cot.estado == Cotizacion.ACEPTADA:
+        asignaciones = list(cot.asignaciones.all())
+        if asignaciones and request.POST.get('quitar_diagrama'):
+            p = Parametros.actuales()
+            try:
+                drive.quitar(p.diagrama_drive_id, [(a.unidad, a.desde, a.hasta, cot.cliente.nombre) for a in asignaciones])
+            except (drive.ErrorDrive, dg.ErrorDiagrama) as e:
+                messages.error(request, f'No se anuló: no se pudo quitar la reserva del diagrama ({e}). '
+                                        f'Podés destildar "Quitar del diagrama" y borrarla a mano.')
+                return redirect('cotizador:detalle', pk)
+            cot.asignaciones.all().delete()
+            avisos.append(f'se quitó del diagrama la unidad {", ".join(a.unidad for a in asignaciones)}')
+        elif asignaciones:
+            avisos.append(f'acordate de borrar del diagrama la unidad {", ".join(a.unidad for a in asignaciones)}')
+        pagado = cot.total_pagos()
+        ahora = timezone.now()
+        cot.movimientos.filter(tipo__in=Movimiento.SUMAN, anulado=False).update(
+            anulado=True, anulado_en=ahora, anulado_por=request.user, motivo_anulacion=f'Venta anulada: {motivo}'[:200])
+        if pagado > 0:
+            if request.POST.get('pagado') == 'devolver':
+                Movimiento.objects.create(
+                    cotizacion=cot, fecha=timezone.localdate(), tipo=Movimiento.DEVOLUCION, importe=pagado,
+                    concepto=f'Devolución por cancelación de COT {cot.numero}', medio=request.POST.get('medio', '') or 'otro',
+                    creado_por=request.user)
+                avisos.append(f'se registró la devolución de $ {round(pagado):,}'.replace(',', '.'))
+            else:
+                Movimiento.objects.create(
+                    cotizacion=cot, fecha=timezone.localdate(), tipo=Movimiento.CARGO, importe=pagado,
+                    concepto=f'Seña retenida por cancelación de COT {cot.numero} (sin reintegro)', creado_por=request.user)
+                avisos.append(f'lo pagado ($ {round(pagado):,}) queda como seña retenida'.replace(',', '.'))
+    cot.estado_antes_de_anular = cot.estado
+    cot.estado = Cotizacion.ANULADA
+    cot.anulada_en, cot.anulada_por, cot.motivo_anulacion = timezone.now(), request.user, motivo[:200]
+    cot.save()
+    messages.success(request, f'Cotización {cot.numero} anulada' + (': ' + '; '.join(avisos) if avisos else '') + '.')
+    return redirect('cotizador:detalle', pk)
+
+
+@login_required
+@require_POST
+def quitar_unidad(request, pk):
+    """Quita del diagrama de Drive la reserva de una unidad que anotó la app."""
+    asignacion = get_object_or_404(AsignacionUnidad.objects.select_related('cotizacion__cliente'), pk=pk)
+    cot = asignacion.cotizacion
+    p = Parametros.actuales()
+    try:
+        drive.quitar(p.diagrama_drive_id, [(asignacion.unidad, asignacion.desde, asignacion.hasta, cot.cliente.nombre)])
+    except (drive.ErrorDrive, dg.ErrorDiagrama) as e:
+        messages.error(request, f'No se quitó del diagrama: {e}')
+        return redirect('cotizador:detalle', cot.pk)
+    asignacion.delete()
+    messages.success(request, f'Se quitó la reserva de la unidad {asignacion.unidad} del diagrama.')
+    return redirect('cotizador:detalle', cot.pk)
 
 
 @login_required
@@ -363,8 +445,8 @@ def descargar_word(request, pk):
 @require_POST
 def eliminar(request, pk):
     cot = get_object_or_404(Cotizacion, pk=pk)
-    if cot.estado == Cotizacion.ACEPTADA:
-        messages.error(request, 'Una cotización aceptada no se puede eliminar. Pasala a pendiente o rechazada primero.')
+    if cot.fue_venta:
+        messages.error(request, 'Una venta no se puede eliminar (tiene cuenta corriente). Usá "Anular".')
         return redirect('cotizador:detalle', pk)
     numero = cot.numero
     cot.delete()
@@ -438,7 +520,7 @@ def cliente_form(request, pk=None):
 def cliente(request, pk):
     cliente_obj = get_object_or_404(Cliente, pk=pk)
     movimientos = Movimiento.objects.filter(
-        cotizacion__cliente=cliente_obj, cotizacion__estado=Cotizacion.ACEPTADA
+        cotizacion__cliente=cliente_obj, cotizacion__estado__in=Cotizacion.CON_CUENTA
     ).select_related('cotizacion').order_by('fecha', 'id')
     filas = _con_saldo_acumulado(movimientos)
     return render(request, 'cotizador/cliente.html', {

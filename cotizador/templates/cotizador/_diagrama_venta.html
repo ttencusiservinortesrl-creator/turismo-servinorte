@@ -1,10 +1,13 @@
+{% if cot.estado == 'aceptada' or asignaciones %}
 <div class="card mb-3">
     <div class="card-header">Diagrama de unidades</div>
     <div class="card-body">
         {% if asignaciones %}
             {% for a in asignaciones %}
                 <div><i class="bi bi-check-circle text-success"></i> Unidad <b>{{ a.unidad }}</b> anotada en el diagrama del {{ a.desde|date:"d/m" }} al {{ a.hasta|date:"d/m/Y" }}
-                    <span class="text-muted small">· {{ a.anotado_en|date:"d/m H:i" }}{% if a.anotado_por %} por {{ a.anotado_por.get_full_name|default:a.anotado_por.username }}{% endif %}</span></div>
+                    <span class="text-muted small">· {{ a.anotado_en|date:"d/m H:i" }}{% if a.anotado_por %} por {{ a.anotado_por.get_full_name|default:a.anotado_por.username }}{% endif %}</span>
+                    {% if cot.estado == 'aceptada' %}<form class="d-inline" method="post" action="{% url 'cotizador:quitar_unidad' a.pk %}" onsubmit="return confirm('¿Quitar la reserva de la unidad {{ a.unidad }} del diagrama de Drive?');">{% csrf_token %}
+                        <button class="btn btn-sm btn-outline-danger py-0 ms-2" type="submit"><i class="bi bi-calendar-x"></i> Quitar del diagrama</button></form>{% endif %}</div>
             {% endfor %}
             <div class="form-text">Si cambia algo del viaje, corregilo directamente en el Excel del diagrama.</div>
         {% elif not diagrama_conectado %}
@@ -52,3 +55,4 @@
         {% endif %}
     </div>
 </div>
+{% endif %}

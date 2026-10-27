@@ -86,11 +86,28 @@ def descargar(file_id, usar_cache=True):
 
 
 def anotar(file_id, viajes):
-    """viajes: lista de (unidad, desde, hasta, renglones). Baja la última versión, escribe y la sube.
-    Si alguien modificó el archivo mientras tanto, no sube nada y avisa."""
+    """viajes: lista de (unidad, desde, hasta, renglones)."""
+    def cambio(contenido):
+        for unidad, desde, hasta, renglones in viajes:
+            contenido = dg.anotar(contenido, unidad, desde, hasta, renglones)
+        return contenido
+    modificar(file_id, cambio)
+
+
+def quitar(file_id, reservas):
+    """reservas: lista de (unidad, desde, hasta, cliente) a borrar del diagrama."""
+    def cambio(contenido):
+        for unidad, desde, hasta, cliente in reservas:
+            contenido = dg.quitar(contenido, unidad, desde, hasta, cliente)
+        return contenido
+    modificar(file_id, cambio)
+
+
+def modificar(file_id, cambio):
+    """Baja la última versión, le aplica `cambio` y la sube. Si alguien modificó el archivo mientras tanto,
+    no sube nada y avisa."""
     contenido, version = descargar(file_id, usar_cache=False)
-    for unidad, desde, hasta, renglones in viajes:
-        contenido = dg.anotar(contenido, unidad, desde, hasta, renglones)
+    contenido = cambio(contenido)
     if _local():
         with open(_local(), 'wb') as f:
             f.write(contenido)
