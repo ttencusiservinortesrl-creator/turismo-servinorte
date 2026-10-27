@@ -29,7 +29,9 @@ class Parametros(models.Model):
         help_text='En la planilla: USD 301.500 × 1.370.')
     valor_residual = models.DecimalField('Valor residual del vehículo', max_digits=16, decimal_places=2, default=D(0))
     vida_util_meses = models.PositiveIntegerField('Vida útil del vehículo (meses)', default=60)
-    seguro_mensual_flota = models.DecimalField('Seguro obligatorio mensual de la flota', max_digits=14, decimal_places=2, default=D(2000000))
+    seguro_mensual_flota = models.DecimalField('Valor de la póliza de seguro (mensual, toda la flota)', max_digits=14,
+        decimal_places=2, default=D(2000000),
+        help_text='Seguro por viaje = póliza ÷ vehículos de la flota ÷ 30 × días del viaje.')
     vehiculos_flota = models.PositiveIntegerField('Cantidad de vehículos de la flota', default=14,
         help_text='El seguro se reparte entre los vehículos y después por día de viaje.')
 
@@ -51,6 +53,12 @@ class Parametros(models.Model):
     precio_referencia_km = models.DecimalField('Precio de referencia por km', max_digits=14, decimal_places=2, default=D(3000),
         help_text='Para comparar: km totales × este precio.')
     porcentaje_iva = models.DecimalField('IVA (%)', max_digits=6, decimal_places=2, default=D('10.5'))
+
+    # Impuestos sobre la venta (se calculan sobre el precio sin IVA)
+    porcentaje_tissh = models.DecimalField('TISSH (%)', max_digits=6, decimal_places=2, default=D('0.6'),
+        help_text='Tasa de Inspección de Seguridad, Salubridad e Higiene (municipal).')
+    porcentaje_amt = models.DecimalField('AMT (%)', max_digits=6, decimal_places=2, default=D('2'))
+    porcentaje_iibb = models.DecimalField('Ingresos Brutos (%)', max_digits=6, decimal_places=2, default=D('3.6'))
 
     # Viajes a futuro
     inflacion_mensual = models.DecimalField('Inflación mensual estimada (%)', max_digits=6, decimal_places=2,
@@ -195,6 +203,8 @@ class Cotizacion(models.Model):
     otros_gastos = models.DecimalField('Otros gastos ($)', max_digits=14, decimal_places=2, default=0)
 
     # Precio
+    items_excluidos = models.TextField('Costos quitados de la suma', blank=True,
+        help_text='Nombres de los ítems del costo que no se suman, separados por |.')
     proyectar_inflacion = models.BooleanField('Proyectar costos por inflación a la fecha del viaje', default=True)
     inflacion_mensual = models.DecimalField('Inflación mensual (%)', max_digits=6, decimal_places=2, default=D('1.70'))
     tarifa_neta = models.DecimalField('Tarifa final sin IVA', max_digits=16, decimal_places=2)

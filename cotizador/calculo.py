@@ -47,6 +47,17 @@ def proyeccion(p, datos):
             'porcentaje': redondear((factor - 1) * CIEN, '0.1')}
 
 
+NOMBRE_IMPUESTOS = 'Impuestos sobre la venta'
+
+
+def _excluidos(datos):
+    """Nombres de los ítems destildados (texto separado por | o lista)."""
+    valor = datos.get('items_excluidos') or datos.get('excluidos') or ''
+    if isinstance(valor, str):
+        valor = valor.split('|')
+    return [v.strip() for v in valor if v and v.strip()]
+
+
 def _lineas(datos):
     """Vehículos de la cotización: [{'vehiculo', 'cantidad', 'choferes'}]. Acepta también el formato
     viejo de un solo vehículo (vehiculo, cantidad_vehiculos, choferes)."""
@@ -121,17 +132,33 @@ def calcular(p, datos):
                                  f"= +{_txt(inflacion['porcentaje'])}% hasta la salida",
                       'inflacion': True})
         del inflacion['factor']
-    costo = sum((i['importe'] for i in items), CERO)
+    # Ítems que el usuario destildó: se muestran pero no se suman.
+    excluidos = set(_excluidos(datos))
+    for item in items:
+        item['excluido'] = item['nombre'] in excluidos
+    costo = sum((i['importe'] for i in items if not i['excluido']), CERO)  # costo operativo
     costo_km = costo / km_totales if km_totales else CERO
+
+    # Impuestos sobre la venta (TISSH + AMT + IIBB): son un % del precio sin IVA. Para que el margen quede
+    # limpio después de impuestos, cada precio se calcula como costo × (1 + margen) ÷ (1 − tasa).
+    tasa_impuestos = (p.porcentaje_tissh + p.porcentaje_amt + p.porcentaje_iibb) / CIEN
+    impuestos_excluidos = NOMBRE_IMPUESTOS in excluidos
+    if impuestos_excluidos or tasa_impuestos >= 1:
+        tasa_aplicada = CERO
+    else:
+        tasa_aplicada = tasa_impuestos
+    divisor_impuestos = 1 - tasa_aplicada
 
     def fila(nombre, total, valor_km=None):
         total = redondear(total)
-        ganancia = total - costo
+        impuestos = redondear(total * tasa_aplicada)
+        ganancia = total - costo - impuestos
         iva = redondear(total * p.porcentaje_iva / CIEN)
         return {
             'nombre': nombre,
             'valor_km': redondear(valor_km if valor_km is not None else (total / km_totales if km_totales else CERO)),
             'total': total,
+            'impuestos': impuestos,
             'ganancia': ganancia,
             'perdida': ganancia < 0,
             'rentabilidad': redondear(ganancia / total * CIEN, '0.1') if total else CERO,
@@ -140,10 +167,12 @@ def calcular(p, datos):
             'bruto': total + iva,
         }
 
-    filas = [fila('Costo', costo, costo_km)]
+    # "Costo" = precio mínimo para no perder: cubre el costo operativo y los impuestos de ese precio.
+    costo_con_impuestos_km = costo_km / divisor_impuestos
+    filas = [fila('Costo', costo / divisor_impuestos, costo_con_impuestos_km)]
     for nombre, margen in (('Mínimo', p.margen_minimo), ('Intermedio', p.margen_intermedio),
                            ('Mercado', p.margen_mercado), ('Óptimo', p.margen_optimo)):
-        valor_km = redondear(costo_km * (1 + margen / CIEN), '1')
+        valor_km = redondear(costo_km * (1 + margen / CIEN) / divisor_impuestos, '1')
         f = fila(f'{nombre} ({_txt(margen)}%)', valor_km * km_totales, valor_km)
         f['sugerido'] = redondear(f['total'] / 10000, '1') * 10000 if f['total'] else CERO
         filas.append(f)
@@ -153,15 +182,27 @@ def calcular(p, datos):
     tarifa = _dec(datos.get('tarifa_neta'))
     final = fila('Tarifa final', tarifa) if tarifa else None
 
+    # En el detalle, los impuestos se muestran sobre la tarifa final (o sobre el precio mínimo si todavía no hay).
+    base = final or filas[0]
+    detalle_impuestos = (f'{_txt(p.porcentaje_tissh)}% TISSH + {_txt(p.porcentaje_amt)}% AMT + '
+                         f'{_txt(p.porcentaje_iibb)}% IIBB = {_txt(tasa_impuestos * CIEN)}% de '
+                         f'${_txt(base["total"])} ({"tarifa final" if final else "precio mínimo"})')
+    items.append({'nombre': NOMBRE_IMPUESTOS, 'importe': redondear(base['total'] * tasa_impuestos),
+                  'detalle': detalle_impuestos, 'excluido': impuestos_excluidos, 'impuesto': True})
+    costo_total = costo + (CERO if impuestos_excluidos else items[-1]['importe'])
+
     return {
         'km_totales': km_totales,
         'capacidad': capacidad,
         'items': items,
-        'costo': redondear(costo),
-        'costo_km': redondear(costo_km),
+        'costo_operativo': redondear(costo),
+        'costo': redondear(costo_total),
+        'costo_km': redondear(costo_total / km_totales) if km_totales else CERO,
+        'tasa_impuestos': redondear(tasa_impuestos * CIEN),
         'filas': filas,
         'final': final,
         'inflacion': inflacion,
+        'excluidos': sorted(excluidos),
     }
 
 

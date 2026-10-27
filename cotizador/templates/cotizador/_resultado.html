@@ -44,13 +44,18 @@
             </tbody>
         </table>
     </div>
+    <div class="card-body py-2 small text-muted">La ganancia ya descuenta los impuestos sobre la venta ({{ r.tasa_impuestos|pesos:1 }}% del precio sin IVA){% if r.excluidos %} y no incluye los costos destildados{% endif %}.</div>
 </div>
 <div class="card shadow-sm">
-    <div class="card-header">Detalle del costo</div>
+    <div class="card-header d-flex"><span>Detalle del costo</span>{% if usar %}<span class="small fw-normal text-muted">Destildá un costo para sacarlo de la suma</span>{% endif %}</div>
     <table class="table table-sm mb-0">
         <tbody>
         {% for i in r.items %}
-            <tr{% if i.inflacion %} class="table-info"{% endif %}><td>{{ i.nombre }} <div class="text-muted small">{{ i.detalle }}</div></td><td class="num">$ {{ i.importe|pesos }}</td></tr>
+            <tr class="{% if i.inflacion %}table-info{% endif %}{% if i.excluido %} costo-excluido{% endif %}">
+                <td>{% if usar %}<input class="form-check-input me-2 incluir-costo" type="checkbox" data-item="{{ i.nombre }}" {% if not i.excluido %}checked{% endif %} title="Incluir en la suma">{% endif %}{{ i.nombre }}{% if i.excluido %} <span class="badge text-bg-light">no se suma</span>{% endif %}
+                    <div class="text-muted small">{{ i.detalle }}</div></td>
+                <td class="num">$ {{ i.importe|pesos }}</td>
+            </tr>
         {% endfor %}
         <tr class="table-secondary fw-semibold"><td>Costo total <span class="fw-normal small">($ {{ r.costo_km|pesos:2 }} por km)</span></td><td class="num">$ {{ r.costo|pesos }}</td></tr>
         </tbody>

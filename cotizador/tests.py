@@ -27,7 +27,8 @@ def datos_cot302(**cambios):
 
 class CalculoTest(TestCase):
     def test_coincide_con_la_planilla(self):
-        r = calculo.calcular(Parametros.actuales(), datos_cot302())
+        # La planilla no tenía impuestos sobre la venta: se comparan con esos impuestos destildados.
+        r = calculo.calcular(Parametros.actuales(), datos_cot302(items_excluidos='Impuestos sobre la venta'))
         importes = {i['nombre']: i['importe'] for i in r['items']}
         self.assertEqual(importes['Cargas sociales'], Decimal('398400.00'))
         self.assertEqual(importes['Sueldo de conductor'], Decimal('830133.33'))
@@ -47,8 +48,8 @@ class CalculoTest(TestCase):
 
     def test_dos_vehiculos_duplican_costo(self):
         p = Parametros.actuales()
-        uno = calculo.calcular(p, datos_cot302())['costo']
-        dos = calculo.calcular(p, datos_cot302(cantidad_vehiculos=2))['costo']
+        uno = calculo.calcular(p, datos_cot302())['costo_operativo']
+        dos = calculo.calcular(p, datos_cot302(cantidad_vehiculos=2))['costo_operativo']
         self.assertAlmostEqual(dos, uno * 2, delta=Decimal('0.1'))
 
     def test_proyeccion_por_inflacion(self):
@@ -59,8 +60,8 @@ class CalculoTest(TestCase):
                                                   proyectar_inflacion=True, inflacion_mensual=Decimal(2)))
         self.assertEqual(futuro['inflacion']['meses'], Decimal('3.0'))
         self.assertEqual(futuro['inflacion']['porcentaje'], Decimal('6.1'))
-        self.assertEqual(futuro['inflacion']['costo_hoy'], hoy['costo'])
-        self.assertAlmostEqual(futuro['costo'], hoy['costo'] * Decimal('1.061208'), delta=Decimal(1))
+        self.assertEqual(futuro['inflacion']['costo_hoy'], hoy['costo_operativo'])
+        self.assertAlmostEqual(futuro['costo_operativo'], hoy['costo_operativo'] * Decimal('1.061208'), delta=Decimal(1))
         self.assertGreater(futuro['filas'][1]['total'], hoy['filas'][1]['total'])
         # Dentro de los 30 días, o con la opción apagada, no se proyecta
         cerca = datos_cot302(fecha=date(2026, 10, 1), salida=datetime(2026, 10, 20, 7, 0), proyectar_inflacion=True,
@@ -68,7 +69,35 @@ class CalculoTest(TestCase):
         self.assertIsNone(calculo.calcular(p, cerca)['inflacion'])
         apagado = datos_cot302(fecha=date(2026, 10, 1), salida=datetime(2026, 12, 30, 7, 0), proyectar_inflacion=False,
                                inflacion_mensual=Decimal(2))
-        self.assertEqual(calculo.calcular(p, apagado)['costo'], hoy['costo'])
+        self.assertEqual(calculo.calcular(p, apagado)['costo_operativo'], hoy['costo_operativo'])
+
+    def test_impuestos_sobre_la_venta(self):
+        p = Parametros.actuales()
+        r = calculo.calcular(p, datos_cot302())
+        self.assertEqual(r['tasa_impuestos'], Decimal('6.20'))
+        # Sobre la tarifa final de 6.950.000: 6,2% = 430.900
+        impuestos = {i['nombre']: i for i in r['items']}['Impuestos sobre la venta']
+        self.assertEqual(impuestos['importe'], Decimal('430900.00'))
+        self.assertEqual(r['costo'], r['costo_operativo'] + Decimal('430900.00'))
+        self.assertEqual(r['final']['ganancia'], Decimal('6950000') - r['costo_operativo'] - Decimal('430900.00'))
+        # El precio "Costo" cubre los impuestos: ganancia cero
+        self.assertEqual(r['filas'][0]['ganancia'], 0)
+        # El margen mínimo (20%) queda limpio después de impuestos
+        minimo = r['filas'][1]
+        self.assertAlmostEqual(minimo['ganancia'], r['costo_operativo'] * Decimal('0.2'), delta=Decimal(2000))
+        # El seguro: póliza ÷ flota ÷ 30 × días = 2.000.000 ÷ 14 ÷ 30 × 5
+        seguro = {i['nombre']: i['importe'] for i in r['items']}['Seguro obligatorio']
+        self.assertEqual(seguro, Decimal('23809.52'))
+
+    def test_destildar_costos(self):
+        p = Parametros.actuales()
+        todo = calculo.calcular(p, datos_cot302())
+        sin = calculo.calcular(p, datos_cot302(items_excluidos='Lavadero|Hotel'))
+        self.assertEqual(sin['costo_operativo'], todo['costo_operativo'] - Decimal('340000') - Decimal('350000'))
+        lavadero = {i['nombre']: i for i in sin['items']}['Lavadero']
+        self.assertTrue(lavadero['excluido'])
+        self.assertEqual(lavadero['importe'], Decimal('340000.00'))   # se sigue mostrando
+        self.assertEqual(sin['excluidos'], ['Hotel', 'Lavadero'])
 
     def test_varios_vehiculos(self):
         p = Parametros.actuales()
@@ -162,6 +191,17 @@ class VistasTest(BaseVistas):
                       'lineas-1-id': linea.pk, 'lineas-1-DELETE': 'on'})
         self.client.post(reverse('cotizador:editar', args=[cot.pk]), datos)
         self.assertEqual(cot.lineas.count(), 1)
+
+    def test_destildar_se_guarda_en_la_cotizacion(self):
+        self.client.post(reverse('cotizador:nueva'), self.post_datos(items_excluidos='Lavadero'))
+        cot = Cotizacion.objects.get()
+        self.assertEqual(cot.items_excluidos, 'Lavadero')
+        self.assertEqual(cot.detalle['excluidos'], ['Lavadero'])
+        r = self.client.get(reverse('cotizador:detalle', args=[cot.pk]))
+        self.assertContains(r, 'no se suma')
+        r = self.client.post(reverse('cotizador:calcular'), self.post_datos(items_excluidos='Lavadero'))
+        self.assertContains(r, 'data-item="Lavadero"')
+        self.assertNotContains(r, 'data-item="Lavadero" checked')
 
     def test_vista_previa(self):
         r = self.client.post(reverse('cotizador:calcular'), self.post_datos())

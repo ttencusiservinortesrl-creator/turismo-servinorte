@@ -37,6 +37,12 @@ PostgreSQL (Supabase) en línea vía `DATABASE_URL`. WhiteNoise sirve los estát
   es un total del viaje. Hotel y peajes son por vehículo.
 - Km totales = km en servicio + km vacíos. El mapa carga los km en servicio; se pueden corregir a mano.
 - "usar" en el resumen redondea la tarifa a $10.000.
+- Impuestos sobre la venta (TISSH 0,6% + AMT 2% + IIBB 3,6%, editables) sobre el precio sin IVA: cada precio de
+  margen = costo operativo × (1 + margen) ÷ (1 − tasa), así el margen queda limpio después de impuestos; la
+  fila "Costo" es el precio de equilibrio. La ganancia descuenta impuestos. La planilla original no los tenía.
+- Seguro = póliza mensual de la flota ÷ vehículos de la flota ÷ 30 × días del viaje.
+- Cada ítem del detalle del costo se puede destildar para sacarlo de la suma (`Cotizacion.items_excluidos`,
+  nombres separados por |); se sigue mostrando tachado.
 - Viajes a futuro: si la salida es más de `proyectar_desde_dias` (30) después de la fecha de la cotización, se
   agrega el ítem "Ajuste por inflación" = costo de hoy × ((1 + inflación mensual)^(días/30) − 1). Los márgenes se
   calculan sobre el costo proyectado. La inflación se puede cambiar en cada cotización (por defecto, la de Parámetros).

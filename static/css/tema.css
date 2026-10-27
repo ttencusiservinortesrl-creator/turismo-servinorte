@@ -210,3 +210,6 @@ a:hover { text-decoration: underline; }
 .chip-unidad { display: inline-block; border-radius: 999px; padding: .15rem .6rem; margin: 0 .25rem .25rem 0; font-size: .8rem; font-weight: 600; }
 .chip-unidad.libre { background: #daf3e6; color: #11663f; }
 .chip-unidad.ocupada { background: #eceff4; color: #6b7487; cursor: help; text-decoration: line-through; }
+
+.costo-excluido td { color: var(--texto-suave); }
+.costo-excluido td.num { text-decoration: line-through; }

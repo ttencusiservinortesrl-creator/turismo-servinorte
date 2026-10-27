@@ -25,7 +25,7 @@ class CotizacionForm(forms.ModelForm):
             'salida', 'regreso', 'texto_salida', 'dias', 'noches',
             'viaticos_por_chofer', 'habitaciones',
             'incluye_hotel', 'incluye_estacionamiento', 'incluye_lavadero', 'peaje', 'otros_gastos',
-            'proyectar_inflacion', 'inflacion_mensual', 'tarifa_neta', 'incluye', 'no_incluye', 'notas_internas',
+            'items_excluidos', 'proyectar_inflacion', 'inflacion_mensual', 'tarifa_neta', 'incluye', 'no_incluye', 'notas_internas',
         ]
         widgets = {
             'fecha': forms.DateInput(attrs={'type': 'date'}, format='%Y-%m-%d'),
@@ -36,6 +36,7 @@ class CotizacionForm(forms.ModelForm):
             'no_incluye': forms.Textarea(attrs={'rows': 2}),
             'notas_internas': forms.Textarea(attrs={'rows': 2}),
             'km_mapa': forms.HiddenInput(),
+            'items_excluidos': forms.HiddenInput(),
         }
 
     def __init__(self, *args, **kwargs):

@@ -16,6 +16,7 @@
 <form method="post" id="form-cot" novalidate>
     {% csrf_token %}
     {{ form.km_mapa }}
+    {{ form.items_excluidos }}
     <div class="row g-3">
         <div class="col-lg-7">
             <div class="card shadow-sm mb-3">
@@ -140,6 +141,15 @@
 
     form.addEventListener('input', recalcular);
     form.addEventListener('change', recalcular);
+
+    // Casillas del detalle del costo: lo destildado no se suma (se guarda con la cotización).
+    document.getElementById('resultado').addEventListener('change', (e) => {
+        if (!e.target.classList.contains('incluir-costo')) return;
+        e.stopPropagation();
+        const quitados = [...document.querySelectorAll('.incluir-costo')].filter(c => !c.checked).map(c => c.dataset.item);
+        $('items_excluidos').value = quitados.join('|');
+        recalcular();
+    });
 
     document.getElementById('resultado').addEventListener('click', (e) => {
         const b = e.target.closest('.usar-tarifa');

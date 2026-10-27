@@ -498,6 +498,7 @@ def parametros(request):
                               'insumos_limpieza']),
         ('Márgenes e IVA', ['margen_minimo', 'margen_intermedio', 'margen_mercado', 'margen_optimo',
                             'precio_referencia_km', 'porcentaje_iva']),
+        ('Impuestos sobre la venta', ['porcentaje_tissh', 'porcentaje_amt', 'porcentaje_iibb']),
         ('Viajes a futuro', ['inflacion_mensual', 'proyectar_desde_dias']),
         ('Word de la cotización', ['origen_habitual', 'porcentaje_sena', 'vigencia_dias', 'incluye', 'no_incluye']),
         ('Diagrama de unidades', ['unidades_turismo', 'diagrama_drive_id']),
