@@ -89,6 +89,19 @@ class CalculoTest(TestCase):
         seguro = {i['nombre']: i['importe'] for i in r['items']}['Seguro obligatorio']
         self.assertEqual(seguro, Decimal('23809.52'))
 
+    def test_colaciones(self):
+        p = Parametros.actuales()
+        sin = calculo.calcular(p, datos_cot302())
+        con = calculo.calcular(p, datos_cot302(colaciones_cantidad=45, colaciones_precio=Decimal(3500)))
+        colaciones = {i['nombre']: i for i in con['items']}['Colaciones']
+        self.assertEqual(colaciones['importe'], Decimal('157500.00'))
+        self.assertEqual(colaciones['detalle'], '45 × $3.500')
+        self.assertEqual(con['costo_operativo'], sin['costo_operativo'] + Decimal('157500'))
+        # Se puede destildar como cualquier costo
+        quitado = calculo.calcular(p, datos_cot302(colaciones_cantidad=45, colaciones_precio=Decimal(3500),
+                                                   items_excluidos='Colaciones'))
+        self.assertEqual(quitado['costo_operativo'], sin['costo_operativo'])
+
     def test_destildar_costos(self):
         p = Parametros.actuales()
         todo = calculo.calcular(p, datos_cot302())
@@ -137,7 +150,7 @@ class BaseVistas(TestCase):
             'lineas-TOTAL_FORMS': '1', 'lineas-INITIAL_FORMS': '0', 'lineas-MIN_NUM_FORMS': '1', 'lineas-MAX_NUM_FORMS': '1000',
             'lineas-0-vehiculo': self.vehiculo.pk, 'lineas-0-cantidad': '1', 'lineas-0-choferes': '1',
             'lineas-0-descripcion': 'BUS  Piso Elevado 50 pasajeros',
-            'habitaciones': '1', 'incluye_estacionamiento': 'on', 'peaje': '0', 'otros_gastos': '0',
+            'habitaciones': '1', 'incluye_estacionamiento': 'on', 'peaje': '0', 'otros_gastos': '0', 'colaciones_cantidad': '0', 'colaciones_precio': '0',
             'inflacion_mensual': '1.70', 'tarifa_neta': '1700000', 'incluye': 'Traslado ida y regreso.\nViáticos de personal.',
             'no_incluye': 'Gastos no especificados & extras.', 'notas_internas': '',
         }
@@ -191,6 +204,16 @@ class VistasTest(BaseVistas):
                       'lineas-1-id': linea.pk, 'lineas-1-DELETE': 'on'})
         self.client.post(reverse('cotizador:editar', args=[cot.pk]), datos)
         self.assertEqual(cot.lineas.count(), 1)
+
+    def test_colaciones_en_la_cotizacion(self):
+        p = Parametros.actuales()
+        p.precio_colacion = Decimal(4000)
+        p.save()
+        self.assertContains(self.client.get(reverse('cotizador:nueva')), 'value="4000.00"')
+        self.client.post(reverse('cotizador:nueva'), self.post_datos(colaciones_cantidad='20', colaciones_precio='4000'))
+        cot = Cotizacion.objects.get()
+        self.assertEqual((cot.colaciones_cantidad, cot.colaciones_precio), (20, Decimal('4000')))
+        self.assertContains(self.client.get(reverse('cotizador:detalle', args=[cot.pk])), '20 × $4.000')
 
     def test_destildar_se_guarda_en_la_cotizacion(self):
         self.client.post(reverse('cotizador:nueva'), self.post_datos(items_excluidos='Lavadero'))

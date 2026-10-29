@@ -44,6 +44,8 @@ class Parametros(models.Model):
     estacionamiento = models.DecimalField('Estacionamiento por viaje', max_digits=14, decimal_places=2, default=D(10000))
     lavadero = models.DecimalField('Lavadero por viaje', max_digits=14, decimal_places=2, default=D(340000))
     insumos_limpieza = models.DecimalField('Insumos de limpieza por viaje', max_digits=14, decimal_places=2, default=D(30000))
+    precio_colacion = models.DecimalField('Precio de la colación (por defecto)', max_digits=14, decimal_places=2, default=D(0),
+        help_text='Se completa solo en las cotizaciones nuevas; en cada una se puede cambiar.')
 
     # Márgenes y precio
     margen_minimo = models.DecimalField('Margen mínimo (%)', max_digits=6, decimal_places=2, default=D(20))
@@ -205,6 +207,8 @@ class Cotizacion(models.Model):
     incluye_lavadero = models.BooleanField('Lavadero', default=True)
     peaje = models.DecimalField('Peajes por vehículo ($)', max_digits=14, decimal_places=2, default=0)
     otros_gastos = models.DecimalField('Otros gastos ($)', max_digits=14, decimal_places=2, default=0)
+    colaciones_cantidad = models.PositiveIntegerField('Colaciones (cantidad)', default=0)
+    colaciones_precio = models.DecimalField('Precio por colación ($)', max_digits=14, decimal_places=2, default=0)
 
     # Precio
     items_excluidos = models.TextField('Costos quitados de la suma', blank=True,

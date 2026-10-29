@@ -84,6 +84,7 @@ def nueva(request):
             'origen': p.origen_habitual, 'incluye': p.incluye, 'no_incluye': p.no_incluye,
             'cliente': request.GET.get('cliente'),
             'inflacion_mensual': p.inflacion_mensual,
+            'colaciones_precio': p.precio_colacion,
         }
         base = Cotizacion.objects.filter(pk=request.GET.get('copiar')).first() if request.GET.get('copiar') else None
         if base:
@@ -600,7 +601,7 @@ def parametros(request):
         ('Vehículo', ['precio_combustible', 'valor_adquisicion', 'valor_residual', 'vida_util_meses',
                       'seguro_mensual_flota', 'vehiculos_flota']),
         ('Gastos por viaje', ['gastos_admin_mensuales', 'divisor_prorrateo', 'estacionamiento', 'lavadero',
-                              'insumos_limpieza']),
+                              'insumos_limpieza', 'precio_colacion']),
         ('Márgenes e IVA', ['margen_minimo', 'margen_intermedio', 'margen_mercado', 'margen_optimo',
                             'precio_referencia_km', 'porcentaje_iva']),
         ('Impuestos sobre la venta', ['porcentaje_tissh', 'porcentaje_amt', 'porcentaje_iibb']),

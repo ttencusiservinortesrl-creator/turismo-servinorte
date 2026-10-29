@@ -123,6 +123,10 @@ def calcular(p, datos):
             detalles.setdefault(nombre, []).append(detalle)
     items = [{'nombre': n, 'importe': v, 'detalle': ' | '.join(d for d in detalles[n] if d)} for n, v in importes.items()]
     items.append({'nombre': 'Otros gastos', 'importe': redondear(_dec(datos.get('otros_gastos'))), 'detalle': 'total del viaje'})
+    cantidad_colaciones = _dec(datos.get('colaciones_cantidad'))
+    precio_colacion = _dec(datos.get('colaciones_precio'))
+    items.append({'nombre': 'Colaciones', 'importe': redondear(cantidad_colaciones * precio_colacion),
+                  'detalle': f'{_txt(cantidad_colaciones)} × ${_txt(precio_colacion)}' if cantidad_colaciones else 'sin colaciones'})
     costo_hoy = sum((i['importe'] for i in items), CERO)
     inflacion = proyeccion(p, datos)
     if inflacion:

@@ -24,7 +24,7 @@ class CotizacionForm(forms.ModelForm):
             'origen', 'paradas', 'ida_y_vuelta', 'itinerario', 'km_servicio', 'km_vacios', 'km_mapa',
             'salida', 'regreso', 'texto_salida', 'dias', 'noches',
             'viaticos_por_chofer', 'habitaciones',
-            'incluye_hotel', 'incluye_estacionamiento', 'incluye_lavadero', 'peaje', 'otros_gastos',
+            'incluye_hotel', 'incluye_estacionamiento', 'incluye_lavadero', 'peaje', 'otros_gastos', 'colaciones_cantidad', 'colaciones_precio',
             'items_excluidos', 'proyectar_inflacion', 'inflacion_mensual', 'tarifa_neta', 'incluye', 'no_incluye', 'notas_internas',
         ]
         widgets = {
