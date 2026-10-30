@@ -73,6 +73,8 @@
                     </div>
                     <template id="linea-vacia">{% with f=formset.empty_form %}{% include 'cotizador/_linea_vehiculo.html' %}{% endwith %}</template>
                     <div class="col-12 mb-2"><button type="button" class="btn btn-sm btn-outline-primary" id="agregar-linea"><i class="bi bi-plus-lg"></i> Agregar otro tipo de vehículo</button></div>
+                    {% include '_campo.html' with campo=form.valor_dia_turismo clase='col-6' %}
+                    {% include '_campo.html' with campo=form.factor_sueldo_conductor clase='col-6' %}
                     {% include '_campo.html' with campo=form.viaticos_por_chofer clase='col-6' %}
                     {% include '_campo.html' with campo=form.habitaciones clase='col-6' %}
                     <div class="col-12 mb-1">

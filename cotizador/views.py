@@ -85,6 +85,8 @@ def nueva(request):
             'cliente': request.GET.get('cliente'),
             'inflacion_mensual': p.inflacion_mensual,
             'colaciones_precio': p.precio_colacion,
+            'valor_dia_turismo': p.valor_dia_turismo,
+            'factor_sueldo_conductor': p.factor_sueldo_conductor,
         }
         base = Cotizacion.objects.filter(pk=request.GET.get('copiar')).first() if request.GET.get('copiar') else None
         if base:

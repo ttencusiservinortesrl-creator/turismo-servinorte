@@ -77,7 +77,10 @@ def calcular(p, datos):
     lineas = _lineas(datos)
     varias = len(lineas) > 1
 
-    sueldo_dia = p.valor_dia_turismo * p.factor_sueldo_conductor
+    # Se pueden cambiar en cada cotización; si no vienen, se usan los de Parámetros.
+    valor_dia = _dec(datos.get('valor_dia_turismo')) or p.valor_dia_turismo
+    factor_sueldo = _dec(datos.get('factor_sueldo_conductor')) or p.factor_sueldo_conductor
+    sueldo_dia = valor_dia * factor_sueldo
     divisor = Decimal(p.divisor_prorrateo or 1)
     flota = Decimal(p.vehiculos_flota or 1)
     vida_util = Decimal(p.vida_util_meses or 1)
@@ -95,7 +98,7 @@ def calcular(p, datos):
             ('Cargas sociales', sueldo_dia * p.porcentaje_cargas_sociales / CIEN * dias * choferes,
              f'{_txt(p.porcentaje_cargas_sociales)}% del sueldo × {_txt(dias)} días × {_txt(choferes)} chofer/es'),
             ('Sueldo de conductor', sueldo_dia * dias * choferes + p.no_remunerativo_mensual / 30 * dias * choferes,
-             f'(sueldo diario + no remunerativo) × {_txt(dias)} días × {_txt(choferes)} chofer/es'),
+             f'(${_txt(valor_dia)} × {_txt(factor_sueldo)} + no remunerativo) × {_txt(dias)} días × {_txt(choferes)} chofer/es'),
             ('Gastos de administración', p.gastos_admin_mensuales / divisor, f'gastos mensuales ÷ {_txt(divisor)}'),
             ('Hotel', p.hotel_por_noche * noches * _dec(datos.get('habitaciones')) if datos.get('incluye_hotel') else CERO,
              f'{_txt(noches)} noches × {datos.get("habitaciones") or 0} habitación/es' if datos.get('incluye_hotel') else 'no incluido'),

@@ -200,6 +200,9 @@ class Cotizacion(models.Model):
     # Los vehículos van en LineaVehiculo (puede haber varios tipos en una misma cotización).
     viaticos_por_chofer = models.PositiveIntegerField('Viáticos por chofer', default=1)
     habitaciones = models.PositiveIntegerField('Habitaciones de hotel por vehículo', default=1)
+    valor_dia_turismo = models.DecimalField('Valor del día en turismo', max_digits=14, decimal_places=2, default=D(480))
+    factor_sueldo_conductor = models.DecimalField('Factor sueldo del conductor', max_digits=10, decimal_places=2,
+        default=D(166), help_text='Sueldo por día y chofer = valor del día × este factor.')
 
     # Gastos que se eligen en cada viaje
     incluye_hotel = models.BooleanField('Hotel', default=True)

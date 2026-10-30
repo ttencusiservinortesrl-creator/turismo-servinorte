@@ -89,6 +89,19 @@ class CalculoTest(TestCase):
         seguro = {i['nombre']: i['importe'] for i in r['items']}['Seguro obligatorio']
         self.assertEqual(seguro, Decimal('23809.52'))
 
+    def test_factor_y_valor_dia_por_cotizacion(self):
+        p = Parametros.actuales()
+        base = calculo.calcular(p, datos_cot302())
+        sueldo = lambda r: {i['nombre']: i['importe'] for i in r['items']}['Sueldo de conductor']
+        cargas = lambda r: {i['nombre']: i['importe'] for i in r['items']}['Cargas sociales']
+        # Mismo cálculo: 480 × 200 × 5 días × 2 choferes + no remunerativo
+        otro = calculo.calcular(p, datos_cot302(factor_sueldo_conductor=Decimal(200)))
+        self.assertEqual(sueldo(otro), Decimal(480 * 200 * 5 * 2) + Decimal('33333.33'))
+        self.assertEqual(cargas(otro), Decimal('480000.00'))   # 50% × 480 × 200 × 5 × 2
+        self.assertGreater(otro['costo_operativo'], base['costo_operativo'])
+        valor = calculo.calcular(p, datos_cot302(valor_dia_turismo=Decimal(500)))
+        self.assertEqual(sueldo(valor), Decimal(500 * 166 * 5 * 2) + Decimal('33333.33'))
+
     def test_colaciones(self):
         p = Parametros.actuales()
         sin = calculo.calcular(p, datos_cot302())
@@ -150,7 +163,7 @@ class BaseVistas(TestCase):
             'lineas-TOTAL_FORMS': '1', 'lineas-INITIAL_FORMS': '0', 'lineas-MIN_NUM_FORMS': '1', 'lineas-MAX_NUM_FORMS': '1000',
             'lineas-0-vehiculo': self.vehiculo.pk, 'lineas-0-cantidad': '1', 'lineas-0-choferes': '1',
             'lineas-0-descripcion': 'BUS  Piso Elevado 50 pasajeros',
-            'habitaciones': '1', 'incluye_estacionamiento': 'on', 'peaje': '0', 'otros_gastos': '0', 'colaciones_cantidad': '0', 'colaciones_precio': '0',
+            'habitaciones': '1', 'incluye_estacionamiento': 'on', 'peaje': '0', 'otros_gastos': '0', 'colaciones_cantidad': '0', 'colaciones_precio': '0', 'valor_dia_turismo': '480', 'factor_sueldo_conductor': '166',
             'inflacion_mensual': '1.70', 'tarifa_neta': '1700000', 'incluye': 'Traslado ida y regreso.\nViáticos de personal.',
             'no_incluye': 'Gastos no especificados & extras.', 'notas_internas': '',
         }
