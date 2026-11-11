@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% load formato %}
+{% block title %}Insumos {{ liq.nombre }}{% endblock %}
+{% block content %}
+<div class="encabezado">
+    <h1><span class="icono"><i class="bi bi-basket"></i></span> Insumos entregados · {{ liq.nombre }}</h1>
+    <a class="btn btn-outline-secondary" href="{% url 'marcoantonio:liquidacion' liq.pk %}">Volver a la liquidación</a>
+</div>
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle mb-0">
+            <thead><tr><th>Fecha</th><th>Artículo</th><th>Sección</th><th class="num">Cantidad</th><th class="num">Precio</th><th class="num">Importe</th><th>Obs.</th><th></th></tr></thead>
+            <tbody>
+            {% for e in entregas %}
+                <tr><td>{{ e.fecha|date:"d/m/Y" }}</td><td>{{ e.articulo.codigo }} · {{ e.articulo.nombre }}</td><td class="small">{{ e.articulo.get_categoria_display }}</td>
+                    <td class="num">{{ e.cantidad|floatformat:"-2" }}</td><td class="num">$ {{ e.precio_unitario|pesos:2 }}</td><td class="num">$ {{ e.total|pesos:2 }}</td>
+                    <td class="small">{{ e.observaciones }}</td>
+                    <td class="text-end"><form method="post" action="{% url 'marcoantonio:entrega_borrar' liq.pk e.pk %}" onsubmit="return confirm('¿Borrar esta entrega?');">{% csrf_token %}<button class="btn btn-sm btn-link text-danger p-0" type="submit"><i class="bi bi-trash"></i></button></form></td></tr>
+            {% empty %}<tr><td colspan="8" class="text-center text-muted py-3">Sin entregas.</td></tr>{% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

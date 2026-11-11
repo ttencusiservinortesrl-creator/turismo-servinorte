@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% load formato %}
+{% block title %}{{ titulo }}{% endblock %}
+{% block content %}
+<div class="encabezado">
+    <h1><span class="icono"><i class="bi {% if titulo == 'Pago' %}bi-cash-coin{% else %}bi-receipt{% endif %}"></i></span> {% if objeto.pk %}Editar{% else %}Cargar{% endif %} {{ titulo|lower }}</h1>
+    <a class="btn btn-outline-secondary" href="{% if titulo == 'Pago' %}{% url 'marcoantonio:pagos' %}{% else %}{% url 'marcoantonio:comprobantes' %}{% endif %}">Volver</a>
+</div>
+<form method="post">
+    {% csrf_token %}
+    <div class="row g-3">
+        <div class="col-lg-7">
+            <div class="card mb-3">
+                <div class="card-header">Datos</div>
+                <div class="card-body row g-2">
+                    {% for campo in form %}{% include '_campo.html' with campo=campo clase='col-md-6' %}{% endfor %}
+                </div>
+            </div>
+            <div class="card mb-3">
+                <div class="card-header">¿A qué liquidación y parte se aplica?</div>
+                <div class="card-body">
+                    {{ formset.management_form }}
+                    {% for e in formset.non_form_errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                    {% for f in formset %}
+                        <div class="row g-2 align-items-end border-bottom pb-2 mb-2">
+                            {% for h in f.hidden_fields %}{{ h }}{% endfor %}
+                            {% include '_campo.html' with campo=f.liquidacion clase='col-md-4' %}
+                            {% include '_campo.html' with campo=f.parte clase='col-md-4' %}
+                            {% include '_campo.html' with campo=f.importe clase='col-md-3' %}
+                            {% if f.instance.pk %}<div class="col-md-1 mb-2 small"><label class="form-check-label">{{ f.DELETE }} quitar</label></div>{% endif %}
+                            {% include '_campo.html' with campo=f.observaciones clase='col-12' %}
+                        </div>
+                    {% endfor %}
+                    <div class="form-text">Se puede repartir entre varias liquidaciones. Si quedan renglones vacíos no pasa nada; guardá y volvé a entrar para tener más.</div>
+                </div>
+            </div>
+            <button class="btn btn-primary btn-lg" type="submit"><i class="bi bi-check-lg"></i> Guardar</button>
+        </div>
+        <div class="col-lg-5">
+            <div class="card">
+                <div class="card-header">Saldos de cada liquidación</div>
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <thead><tr><th>Mes / parte</th><th class="num">Importe</th><th class="num">{% if titulo == 'Pago' %}Falta cobrar{% else %}Sin comprobante{% endif %}</th></tr></thead>
+                        <tbody>
+                        {% for p in pendientes %}
+                            <tr><td class="small">{{ p.liq.nombre }}{% if not p.liq.cerrada %} <span class="badge estado-pendiente">abierta</span>{% endif %}<div class="text-muted">{{ p.parte }}</div></td>
+                                <td class="num">{{ p.importe|pesos }}</td>
+                                {% if titulo == 'Pago' %}<td class="num {% if p.saldo > 0 %}text-danger fw-semibold{% endif %}">{{ p.saldo|pesos }}</td>
+                                {% else %}<td class="num {% if p.sin_comprobante > 0 %}text-danger fw-semibold{% endif %}">{{ p.sin_comprobante|pesos }}</td>{% endif %}</tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+{% endblock %}

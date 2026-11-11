@@ -8,5 +8,6 @@ urlpatterns = [
     path('ingresar/', auth_views.LoginView.as_view(), name='login'),
     path('salir/', auth_views.LogoutView.as_view(), name='logout'),
     path('cotizaciones/', include('cotizador.urls')),
+    path('marco-antonio/', include('marcoantonio.urls')),
     path('', RedirectView.as_view(pattern_name='cotizador:lista', permanent=False)),
 ]

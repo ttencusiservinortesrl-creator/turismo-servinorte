@@ -31,6 +31,16 @@ PostgreSQL (Supabase) en línea vía `DATABASE_URL`. WhiteNoise sirve los estát
   `scripts/preparar_plantilla.py` desde un Word real (COT 299); las marcas son `{{FECHA}}`, `{{NUMERO}}`, etc.
   Los párrafos `{{INCLUYE}}` y `{{NO_INCLUYE}}` se repiten uno por renglón.
 
+## Marco Antonio Tours (app `marcoantonio`)
+Empresa relacionada a la que Servinorte presta servicios de transporte e insumos (colaciones, limpieza). Reemplaza la
+planilla "PL - MARCO ANTONIO TOURS NACIONAL 2026". Liquidación mensual = servicios (tarifa vendida) + agua + insumos;
+se discrimina en **parte facturada** (neto × % facturado + IVA) y **parte en efectivo sin factura** (el resto, sin IVA).
+Lo decidió la contadora (Tatiana): la app identifica cada parte; no avisa sobre el efectivo. Pagos y comprobantes se
+imputan a liquidación + parte. Controles: comprobantes anticipados (antes del mes o del cierre), transferencias sin
+factura vinculada, pagos/comprobantes sin imputar, parte facturada sin comprobante, saldos. La cuenta corriente solo
+cuenta liquidaciones cerradas. "Importar planilla" (superusuario) carga la planilla y reemplaza todo lo de MAT; un mes
+sin importe en LIQUIDACIONES queda abierto. Verificado contra la hoja RESUMEN (saldo −4.814.354,18 a favor de MAT).
+
 ## Decisiones
 - Cambiar parámetros no toca las cotizaciones guardadas; al editar y guardar una, se recalcula con los de hoy.
 - Cada ítem del costo se calcula por vehículo (choferes y rendimiento de cada línea) y se suma; "Otros gastos"

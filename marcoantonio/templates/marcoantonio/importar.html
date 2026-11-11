@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+{% block title %}Importar planilla de Marco Antonio{% endblock %}
+{% block content %}
+<div class="encabezado"><h1><span class="icono"><i class="bi bi-upload"></i></span> Importar la planilla de Marco Antonio</h1></div>
+{% include 'marcoantonio/_menu.html' %}
+<div class="row g-3">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-body">
+                <p>Subí la planilla <b>PL - MARCO ANTONIO TOURS NACIONAL</b> (.xlsx). Se cargan las liquidaciones, el detalle de cada mes
+                    (servicios e insumos), los pagos, los comprobantes y sus imputaciones.</p>
+                <div class="alert alert-warning py-2 small">Es para la carga inicial: <b>reemplaza todo</b> lo que haya cargado de Marco Antonio en la app.</div>
+                <form method="post" enctype="multipart/form-data" class="row g-2">
+                    {% csrf_token %}
+                    {% include '_campo.html' with campo=form.archivo clase='col-12' %}
+                    {% include '_campo.html' with campo=form.confirmar clase='col-12' %}
+                    <div class="col-12"><button class="btn btn-primary" type="submit"><i class="bi bi-upload"></i> Importar</button></div>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% if resultado %}
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">Resultado</div>
+            <div class="card-body small">
+                <div>Liquidaciones: <b>{{ resultado.liquidaciones }}</b> · servicios: <b>{{ resultado.servicios }}</b> · entregas de insumos: <b>{{ resultado.entregas }}</b> ({{ resultado.articulos }} artículos)</div>
+                <div>Pagos: <b>{{ resultado.pagos }}</b> ({{ resultado.imputaciones_pagos }} imputaciones) · comprobantes: <b>{{ resultado.comprobantes }}</b> ({{ resultado.imputaciones_comprobantes }} imputaciones)</div>
+                {% if resultado.avisos %}<hr><b>Para revisar:</b><ul class="mb-0">{% for a in resultado.avisos %}<li>{{ a }}</li>{% endfor %}</ul>{% endif %}
+                <hr><a class="btn btn-sm btn-primary" href="{% url 'marcoantonio:tablero' %}">Ver el tablero</a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

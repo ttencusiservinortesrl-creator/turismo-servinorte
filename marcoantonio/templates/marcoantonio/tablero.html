@@ -1,0 +1,102 @@
+{% extends 'base.html' %}
+{% load formato %}
+{% block title %}Marco Antonio Tours{% endblock %}
+{% block content %}
+<div class="encabezado">
+    <h1><span class="icono"><i class="bi bi-briefcase"></i></span> Marco Antonio Tours</h1>
+    <a class="btn btn-primary" href="{% url 'marcoantonio:liquidacion_nueva' %}"><i class="bi bi-plus-lg"></i> Nueva liquidación</a>
+    <a class="btn btn-outline-primary" href="{% url 'marcoantonio:pago_nuevo' %}"><i class="bi bi-cash-coin"></i> Cargar pago</a>
+    <a class="btn btn-outline-primary" href="{% url 'marcoantonio:comprobante_nuevo' %}"><i class="bi bi-receipt"></i> Cargar comprobante</a>
+</div>
+{% include 'marcoantonio/_menu.html' %}
+
+<div class="row g-3 mb-3">
+    <div class="col-6 col-lg-3"><div class="tarjeta-numero">
+        <div class="etiqueta">Parte facturada (neto + IVA)</div><div class="valor">$ {{ cc.liquidado.facturada|pesos }}</div>
+        <div class="nota">liquidaciones cerradas</div></div></div>
+    <div class="col-6 col-lg-3"><div class="tarjeta-numero">
+        <div class="etiqueta">Parte en efectivo sin factura</div><div class="valor">$ {{ cc.liquidado.efectivo|pesos }}</div>
+        <div class="nota">liquidaciones cerradas</div></div></div>
+    <div class="col-6 col-lg-3"><div class="tarjeta-numero">
+        <div class="etiqueta">Recibido</div><div class="valor text-success">$ {{ cc.recibido|pesos }}</div>
+        <div class="nota">{% for medio, importe in cc.recibido_por_medio.items %}{{ medio }} $ {{ importe|pesos }}{% if not forloop.last %} · {% endif %}{% endfor %}</div></div></div>
+    <div class="col-6 col-lg-3"><div class="tarjeta-numero">
+        <div class="etiqueta">Saldo de la cuenta</div>
+        <div class="valor {% if cc.saldo > 0 %}text-danger{% else %}text-success{% endif %}">$ {{ cc.saldo|pesos }}</div>
+        <div class="nota">{% if cc.saldo > 0 %}MAT debe{% elif cc.saldo < 0 %}a favor de MAT{% else %}saldado{% endif %}{% if cc.en_curso %} · en curso (abiertas): $ {{ cc.en_curso|pesos }}{% endif %}</div></div></div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header">Liquidaciones</div>
+    <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle mb-0">
+            <thead>
+                <tr><th rowspan="2">Mes</th><th rowspan="2" class="num">Neto</th>
+                    <th colspan="3" class="text-center border-start">Parte facturada (neto + IVA)</th>
+                    <th colspan="3" class="text-center border-start">Parte en efectivo sin factura</th><th rowspan="2"></th></tr>
+                <tr><th class="num border-start">Importe</th><th class="num">Pagado</th><th class="num">Saldo</th>
+                    <th class="num border-start">Importe</th><th class="num">Pagado</th><th class="num">Saldo</th></tr>
+            </thead>
+            <tbody>
+            {% for f in filas %}
+                <tr>
+                    <td><a href="{% url 'marcoantonio:liquidacion' f.liq.pk %}">{{ f.liq.nombre }}</a>
+                        {% if not f.liq.cerrada %}<span class="badge estado-pendiente">abierta</span>{% endif %}
+                        <div class="small text-muted">{{ f.liq.porcentaje_facturado|pesos:0 }}% facturado</div></td>
+                    <td class="num">{{ f.liq.neto|pesos }}</td>
+                    <td class="num border-start">{{ f.partes.facturada.importe|pesos }}</td>
+                    <td class="num text-success">{{ f.partes.facturada.pagado|pesos }}</td>
+                    <td class="num fw-semibold {% if f.partes.facturada.saldo > 0 %}text-danger{% endif %}">{{ f.partes.facturada.saldo|pesos }}</td>
+                    <td class="num border-start">{{ f.partes.efectivo.importe|pesos }}</td>
+                    <td class="num text-success">{{ f.partes.efectivo.pagado|pesos }}</td>
+                    <td class="num fw-semibold {% if f.partes.efectivo.saldo > 0 %}text-danger{% endif %}">{{ f.partes.efectivo.saldo|pesos }}</td>
+                    <td class="text-end"><a class="btn btn-sm btn-outline-secondary" href="{% url 'marcoantonio:liquidacion' f.liq.pk %}">Ver</a></td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="9" class="text-center text-muted py-4">Todavía no hay liquidaciones.{% if user.is_superuser %} Podés <a href="{% url 'marcoantonio:importar' %}">importar la planilla</a>.{% endif %}</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header d-flex"><span>Controles</span><span class="small fw-normal text-muted">{{ controles.total }} cosa{{ controles.total|pluralize:"s" }} para revisar</span></div>
+    <div class="card-body">
+        <div class="row g-4">
+            <div class="col-lg-6">
+                <h6 class="fw-semibold"><i class="bi bi-calendar-x text-danger"></i> Comprobantes emitidos antes de tiempo</h6>
+                {% for c, imp, motivo in controles.anticipados %}
+                    <div class="small">{{ c.fecha|date:"d/m/Y" }} · <a href="{% url 'marcoantonio:comprobante_editar' c.pk %}">{{ c }}</a> imputado a {{ imp.liquidacion.nombre }} ({{ imp.get_parte_display }}) por $ {{ imp.importe|pesos }} — <b>{{ motivo }}</b></div>
+                {% empty %}<div class="small text-muted">Ninguno.</div>{% endfor %}
+
+                <h6 class="fw-semibold mt-3"><i class="bi bi-arrow-left-right text-warning"></i> Transferencias sin factura vinculada</h6>
+                {% for p in controles.transferencias_sin_factura %}
+                    <div class="small">{{ p.fecha|date:"d/m/Y" }} · <a href="{% url 'marcoantonio:pago_editar' p.pk %}">$ {{ p.importe_ars|pesos }}</a> {% if p.banco_referencia %}({{ p.banco_referencia }}){% endif %} {{ p.observaciones|truncatechars:50 }}</div>
+                {% empty %}<div class="small text-muted">Ninguna.</div>{% endfor %}
+
+                <h6 class="fw-semibold mt-3"><i class="bi bi-hourglass-split text-warning"></i> Pagos sin imputar del todo</h6>
+                {% for p, saldo in controles.pagos_sin_imputar %}
+                    <div class="small">{{ p.fecha|date:"d/m/Y" }} · <a href="{% url 'marcoantonio:pago_editar' p.pk %}">{{ p.get_medio_display }} $ {{ p.importe_ars|pesos }}</a> — falta aplicar <b>$ {{ saldo|pesos }}</b></div>
+                {% empty %}<div class="small text-muted">Ninguno.</div>{% endfor %}
+            </div>
+            <div class="col-lg-6">
+                <h6 class="fw-semibold"><i class="bi bi-receipt-cutoff text-warning"></i> Comprobantes sin imputar del todo</h6>
+                {% for c, saldo in controles.comprobantes_sin_imputar %}
+                    <div class="small">{{ c.fecha|date:"d/m/Y" }} · <a href="{% url 'marcoantonio:comprobante_editar' c.pk %}">{{ c }}</a> ({{ c.get_motivo_display }}) — sin aplicar <b>$ {{ saldo|pesos }}</b></div>
+                {% empty %}<div class="small text-muted">Ninguno.</div>{% endfor %}
+
+                <h6 class="fw-semibold mt-3"><i class="bi bi-file-earmark-minus text-warning"></i> Parte facturada todavía sin comprobante</h6>
+                {% for liq, falta in controles.pendiente_facturar %}
+                    <div class="small"><a href="{% url 'marcoantonio:liquidacion' liq.pk %}">{{ liq.nombre }}</a> — falta comprobante por <b>$ {{ falta|pesos }}</b></div>
+                {% empty %}<div class="small text-muted">Nada pendiente.</div>{% endfor %}
+
+                <h6 class="fw-semibold mt-3"><i class="bi bi-wallet2 text-danger"></i> Saldos a cobrar</h6>
+                {% for liq, parte, saldo in controles.a_cobrar %}
+                    <div class="small"><a href="{% url 'marcoantonio:liquidacion' liq.pk %}">{{ liq.nombre }}</a> · {{ parte }} — <b>$ {{ saldo|pesos }}</b></div>
+                {% empty %}<div class="small text-muted">Nada pendiente de cobro.</div>{% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

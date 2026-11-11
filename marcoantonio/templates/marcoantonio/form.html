@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% block title %}{{ titulo }}{% endblock %}
+{% block content %}
+<div class="encabezado">
+    <h1><span class="icono"><i class="bi bi-briefcase"></i></span> {{ titulo }}</h1>
+    <a class="btn btn-outline-secondary" href="{% if volver %}{% url 'marcoantonio:liquidacion' volver.pk %}{% else %}{% url 'marcoantonio:tablero' %}{% endif %}">Volver</a>
+</div>
+<div class="card" style="max-width: 900px">
+    <div class="card-body">
+        <form method="post" class="row g-2">
+            {% csrf_token %}
+            {% for campo in form %}{% include '_campo.html' with campo=campo clase='col-md-6' ayuda=True %}{% endfor %}
+            <div class="col-12"><button class="btn btn-primary" type="submit"><i class="bi bi-check-lg"></i> Guardar</button></div>
+        </form>
+    </div>
+</div>
+{% endblock %}

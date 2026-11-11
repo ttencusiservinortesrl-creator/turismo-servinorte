@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+{% load formato %}
+{% block title %}Pagos de Marco Antonio{% endblock %}
+{% block content %}
+<div class="encabezado">
+    <h1><span class="icono"><i class="bi bi-cash-coin"></i></span> Pagos recibidos de Marco Antonio</h1>
+    <a class="btn btn-primary" href="{% url 'marcoantonio:pago_nuevo' %}"><i class="bi bi-plus-lg"></i> Cargar pago</a>
+</div>
+{% include 'marcoantonio/_menu.html' %}
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle mb-0">
+            <thead><tr><th>Fecha</th><th>Ref.</th><th>Forma</th><th class="num">Importe</th><th>Recibo</th><th>Factura</th><th>Aplicado a</th><th class="num">Sin imputar</th><th></th></tr></thead>
+            <tbody>
+            {% for p in pagos %}
+                <tr{% if p.anulado %} class="mov-anulado"{% endif %}>
+                    <td>{{ p.fecha|date:"d/m/Y" }}</td><td class="small">{{ p.ref_planilla }}</td>
+                    <td>{{ p.get_medio_display }}{% if p.moneda == 'USD' %} <span class="small text-muted">US$ {{ p.importe_origen|pesos:2 }} × {{ p.tipo_cambio|pesos:2 }}</span>{% endif %}
+                        {% if p.banco_referencia %}<div class="small text-muted">{{ p.banco_referencia }}</div>{% endif %}</td>
+                    <td class="num fw-semibold">$ {{ p.importe_ars|pesos:2 }}</td>
+                    <td class="small">{{ p.tipo_recibo }} {{ p.numero_recibo }}</td>
+                    <td class="small">{% if p.comprobante %}{{ p.comprobante }}{% elif p.medio == 'transferencia' %}<span class="text-warning-emphasis">sin factura</span>{% endif %}</td>
+                    <td class="small">{% for i in p.imputaciones.all %}{{ i.liquidacion.codigo }} ({% if i.parte == 'facturada' %}fact.{% else %}efvo.{% endif %}) $ {{ i.importe|pesos }}{% if not forloop.last %}<br>{% endif %}{% empty %}<span class="text-warning-emphasis">sin imputar</span>{% endfor %}</td>
+                    <td class="num {% if p.sin_imputar > 0 %}text-danger fw-semibold{% endif %}">{{ p.sin_imputar|pesos:2 }}</td>
+                    <td class="text-end text-nowrap"><a class="btn btn-sm btn-outline-secondary py-0" href="{% url 'marcoantonio:pago_editar' p.pk %}"><i class="bi bi-pencil"></i></a>
+                        <form class="d-inline" method="post" action="{% url 'marcoantonio:anular' 'pago' p.pk %}" onsubmit="return confirm('{% if p.anulado %}¿Volver a contar este pago?{% else %}¿Anular este pago?{% endif %}');">{% csrf_token %}
+                            <button class="btn btn-sm btn-link {% if p.anulado %}text-success{% else %}text-danger{% endif %} p-0 ms-1" type="submit" title="{% if p.anulado %}Volver a contar{% else %}Anular{% endif %}"><i class="bi {% if p.anulado %}bi-arrow-counterclockwise{% else %}bi-x-circle{% endif %}"></i></button></form></td>
+                </tr>
+            {% empty %}<tr><td colspan="9" class="text-center text-muted py-4">Sin pagos cargados.</td></tr>{% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

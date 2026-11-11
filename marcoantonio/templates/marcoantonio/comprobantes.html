@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+{% load formato %}
+{% block title %}Comprobantes de Marco Antonio{% endblock %}
+{% block content %}
+<div class="encabezado">
+    <h1><span class="icono"><i class="bi bi-receipt"></i></span> Comprobantes emitidos a Marco Antonio</h1>
+    <a class="btn btn-primary" href="{% url 'marcoantonio:comprobante_nuevo' %}"><i class="bi bi-plus-lg"></i> Cargar comprobante</a>
+</div>
+{% include 'marcoantonio/_menu.html' %}
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle mb-0">
+            <thead><tr><th>Fecha</th><th>Ref.</th><th>Comprobante</th><th>Motivo</th><th class="num">Importe</th><th>Aplicado a</th><th class="num">Sin imputar</th><th>Pagos vinculados</th><th></th></tr></thead>
+            <tbody>
+            {% for c in comprobantes %}
+                <tr{% if c.anulado %} class="mov-anulado"{% endif %}>
+                    <td>{{ c.fecha|date:"d/m/Y" }}</td><td class="small">{{ c.ref_planilla }}</td>
+                    <td>{{ c.tipo }} {{ c.numero }}{% if c.observaciones %}<div class="small text-muted">{{ c.observaciones|truncatechars:60 }}</div>{% endif %}</td>
+                    <td class="small">{{ c.get_motivo_display }}</td>
+                    <td class="num fw-semibold">$ {{ c.importe|pesos:2 }}</td>
+                    <td class="small">{% for i in c.imputaciones.all %}{{ i.liquidacion.codigo }} ({% if i.parte == 'facturada' %}fact.{% else %}efvo.{% endif %}) $ {{ i.importe|pesos }}{% if not forloop.last %}<br>{% endif %}{% empty %}<span class="text-warning-emphasis">sin imputar</span>{% endfor %}
+                        {% for imp, motivo in c.anticipos %}<div><span class="badge text-bg-danger">emitido {{ motivo }}</span></div>{% endfor %}</td>
+                    <td class="num {% if c.sin_imputar > 0 %}text-danger fw-semibold{% endif %}">{{ c.sin_imputar|pesos:2 }}</td>
+                    <td class="small">{% for p in c.pagos.all %}{{ p.fecha|date:"d/m" }} $ {{ p.importe_ars|pesos }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</td>
+                    <td class="text-end text-nowrap"><a class="btn btn-sm btn-outline-secondary py-0" href="{% url 'marcoantonio:comprobante_editar' c.pk %}"><i class="bi bi-pencil"></i></a>
+                        <form class="d-inline" method="post" action="{% url 'marcoantonio:anular' 'comprobante' c.pk %}" onsubmit="return confirm('{% if c.anulado %}¿Volver a contar este comprobante?{% else %}¿Anular este comprobante?{% endif %}');">{% csrf_token %}
+                            <button class="btn btn-sm btn-link {% if c.anulado %}text-success{% else %}text-danger{% endif %} p-0 ms-1" type="submit"><i class="bi {% if c.anulado %}bi-arrow-counterclockwise{% else %}bi-x-circle{% endif %}"></i></button></form></td>
+                </tr>
+            {% empty %}<tr><td colspan="9" class="text-center text-muted py-4">Sin comprobantes cargados.</td></tr>{% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

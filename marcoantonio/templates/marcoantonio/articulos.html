@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% load formato %}
+{% block title %}Artículos de insumos{% endblock %}
+{% block content %}
+<div class="encabezado"><h1><span class="icono"><i class="bi bi-basket"></i></span> Artículos de insumos</h1></div>
+{% include 'marcoantonio/_menu.html' %}
+<div class="row g-3">
+    <div class="col-lg-7">
+        <div class="card">
+            <div class="table-responsive">
+                <table class="table table-sm table-hover align-middle mb-0">
+                    <thead><tr><th>Código</th><th>Artículo</th><th>Sección</th><th class="num">Precio</th><th></th></tr></thead>
+                    <tbody>
+                    {% for a in articulos %}
+                        <tr class="{% if not a.activo %}text-muted{% endif %}"><td>{{ a.codigo }}</td><td>{{ a.nombre }}{% if not a.activo %} (inactivo){% endif %}</td>
+                            <td class="small">{{ a.get_categoria_display }}</td><td class="num">$ {{ a.precio|pesos:2 }}</td>
+                            <td class="text-end"><a class="btn btn-sm btn-outline-secondary py-0" href="{% url 'marcoantonio:articulo_editar' a.pk %}"><i class="bi bi-pencil"></i></a></td></tr>
+                    {% empty %}<tr><td colspan="5" class="text-center text-muted py-3">Sin artículos.</td></tr>{% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-5">
+        <div class="card">
+            <div class="card-header">{% if articulo %}Editar {{ articulo.nombre }}{% else %}Agregar artículo{% endif %}</div>
+            <div class="card-body">
+                <form method="post" class="row g-2">
+                    {% csrf_token %}
+                    {% for campo in form %}{% include '_campo.html' with campo=campo clase='col-12' %}{% endfor %}
+                    <div class="col-12 d-flex gap-2"><button class="btn btn-primary" type="submit"><i class="bi bi-check-lg"></i> Guardar</button>
+                        {% if articulo %}<a class="btn btn-outline-secondary" href="{% url 'marcoantonio:articulos' %}">Cancelar</a>{% endif %}</div>
+                </form>
+                <div class="form-text mt-2">Si cambiás el precio, se usa en las entregas nuevas; las ya cargadas quedan con el precio que tenían.</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
