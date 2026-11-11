@@ -15,7 +15,7 @@ from decimal import Decimal, InvalidOperation
 import openpyxl
 from django.db import transaction
 
-from .models import (EFECTIVO, FACTURADA, Articulo, pesos_texto, Comprobante, EntregaInsumo, ImputacionComprobante, ImputacionPago,
+from .models import (EFECTIVO, FACTURADA, Articulo, forzar_efectivo, pesos_texto, Comprobante, EntregaInsumo, ImputacionComprobante, ImputacionPago,
                      Liquidacion, Pago, ServicioMAT, redondear)
 
 PARTES = {'EFECTIVO NETO': EFECTIVO, 'TRANSFERENCIA C/IVA': FACTURADA, 'TRANSFERENCIA': FACTURADA, 'FACTURADA': FACTURADA}
@@ -261,7 +261,7 @@ def importar(contenido):
         moneda = _texto(v[3]).upper() or 'ARS'
         observaciones = _texto(v[11])
         vinculado = None
-        m = re.search(r'FAC\s*A?\s*([A]?\d[\d-]+)', observaciones.upper())
+        m = re.search(r'FAC\s*[AM]?\s*([AM]?\d[\d-]+)', observaciones.upper())
         if m:
             vinculado = por_numero.get(re.sub(r'\D', '', m.group(1)).lstrip('0'))
         pagos[ref] = Pago.objects.create(
@@ -288,6 +288,11 @@ def importar(contenido):
 
     imp_pagos = imputar('IMPUTACION PAGOS', pagos, ImputacionPago, 'pago')
     imp_comp = imputar('IMPUTACION FACTURAS', comprobantes, ImputacionComprobante, 'comprobante')
+
+    # Facturas M y sus recibos: sin IVA, en negro (parte en efectivo), diga lo que diga la planilla
+    for objeto in list(comprobantes.values()) + list(pagos.values()):
+        if forzar_efectivo(objeto):
+            avisos.append(f'{objeto}: es "M" (en negro, sin IVA); su imputación se pasó a la parte en efectivo.')
 
     return {
         'liquidaciones': Liquidacion.objects.count(), 'pagos': len(pagos), 'comprobantes': len(comprobantes),

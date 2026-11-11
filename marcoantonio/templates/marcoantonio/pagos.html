@@ -18,7 +18,7 @@
                     <td>{{ p.get_medio_display }}{% if p.moneda == 'USD' %} <span class="small text-muted">US$ {{ p.importe_origen|pesos:2 }} × {{ p.tipo_cambio|pesos:2 }}</span>{% endif %}
                         {% if p.banco_referencia %}<div class="small text-muted">{{ p.banco_referencia }}</div>{% endif %}</td>
                     <td class="num fw-semibold">$ {{ p.importe_ars|pesos:2 }}</td>
-                    <td class="small">{{ p.tipo_recibo }} {{ p.numero_recibo }}</td>
+                    <td class="small">{{ p.tipo_recibo }} {{ p.numero_recibo }}{% if p.en_negro %} <span class="badge pago-sin_importe">en negro</span>{% endif %}</td>
                     <td class="small">{% if p.comprobante %}{{ p.comprobante }}{% elif p.medio == 'transferencia' %}<span class="text-warning-emphasis">sin factura</span>{% endif %}</td>
                     <td class="small">{% for i in p.imputaciones.all %}{{ i.liquidacion.codigo }} ({% if i.parte == 'facturada' %}fact.{% else %}efvo.{% endif %}) $ {{ i.importe|pesos }}{% if not forloop.last %}<br>{% endif %}{% empty %}<span class="text-warning-emphasis">sin imputar</span>{% endfor %}</td>
                     <td class="num {% if p.sin_imputar > 0 %}text-danger fw-semibold{% endif %}">{{ p.sin_imputar|pesos:2 }}</td>

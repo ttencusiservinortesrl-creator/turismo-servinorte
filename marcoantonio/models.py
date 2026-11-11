@@ -289,6 +289,17 @@ class EntregaInsumo(models.Model):
         return redondear(self.cantidad * self.precio_unitario)
 
 
+COMPROBANTES_EN_NEGRO = ('FAC M', 'NC M')
+
+
+def forzar_efectivo(objeto):
+    """Pasa a la parte en efectivo las imputaciones de un comprobante M o de un pago en negro.
+    Devuelve cuántas cambió."""
+    if not objeto.en_negro:
+        return 0
+    return objeto.imputaciones.exclude(parte=EFECTIVO).update(parte=EFECTIVO)
+
+
 class Comprobante(models.Model):
     TIPOS = [('FAC A', 'Factura A'), ('FAC M', 'Factura M'), ('FAC B', 'Factura B'), ('NC A', 'Nota de crédito A'),
              ('NC M', 'Nota de crédito M'), ('ND A', 'Nota de débito A'), ('OTRO', 'Otro')]
@@ -311,6 +322,11 @@ class Comprobante(models.Model):
 
     def __str__(self):
         return f'{self.tipo} {self.numero}'
+
+    @property
+    def en_negro(self):
+        """Factura (o NC) M: sin IVA, se cobra en efectivo sin factura (decisión de la contadora)."""
+        return self.tipo in COMPROBANTES_EN_NEGRO
 
     def imputado(self):
         return _suma(self.imputaciones.all())
@@ -371,6 +387,11 @@ class Pago(models.Model):
 
     def __str__(self):
         return f'Pago {self.fecha:%d/%m/%Y} {self.get_medio_display()} $ {self.importe_ars}'
+
+    @property
+    def en_negro(self):
+        """Recibo M o pago de una factura M: va a la parte en efectivo sin factura."""
+        return self.tipo_recibo == 'REC M' or bool(self.comprobante_id and self.comprobante.en_negro)
 
     @property
     def importe_ars(self):

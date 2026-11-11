@@ -15,7 +15,7 @@
             {% for c in comprobantes %}
                 <tr{% if c.anulado %} class="mov-anulado"{% endif %}>
                     <td>{{ c.fecha|date:"d/m/Y" }}</td><td class="small">{{ c.ref_planilla }}</td>
-                    <td>{{ c.tipo }} {{ c.numero }}{% if c.observaciones %}<div class="small text-muted">{{ c.observaciones|truncatechars:60 }}</div>{% endif %}</td>
+                    <td>{{ c.tipo }} {{ c.numero }}{% if c.en_negro %} <span class="badge pago-sin_importe">en negro · sin IVA</span>{% endif %}{% if c.observaciones %}<div class="small text-muted">{{ c.observaciones|truncatechars:60 }}</div>{% endif %}</td>
                     <td class="small">{{ c.get_motivo_display }}</td>
                     <td class="num fw-semibold">$ {{ c.importe|pesos:2 }}</td>
                     <td class="small">{% for i in c.imputaciones.all %}{{ i.liquidacion.codigo }} ({% if i.parte == 'facturada' %}fact.{% else %}efvo.{% endif %}) $ {{ i.importe|pesos }}{% if not forloop.last %}<br>{% endif %}{% empty %}<span class="text-warning-emphasis">sin imputar</span>{% endfor %}

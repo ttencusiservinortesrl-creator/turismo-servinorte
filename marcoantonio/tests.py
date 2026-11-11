@@ -265,3 +265,36 @@ class SalidasTest(TestCase):
         self.assertEqual(sum(a['importe'] for a in aplic), sal.total())
         self.assertContains(self.client.get(reverse('marcoantonio:salida', args=[sal.pk])), 'Pagada')
         self.assertContains(self.client.get(reverse('marcoantonio:salidas') + '?estado=pagadas'), 'CAFAYATE')
+
+
+class FacturaMTest(TestCase):
+    def setUp(self):
+        self.client.force_login(User.objects.create_superuser('tatiana', 't@x.com', 'clave-segura-123'))
+        self.liq = Liquidacion.objects.create(periodo=date(2026, 9, 1), neto_manual=200000)
+
+    def _imp(self, parte, importe):
+        return {'imp-TOTAL_FORMS': '1', 'imp-INITIAL_FORMS': '0', 'imp-MIN_NUM_FORMS': '0', 'imp-MAX_NUM_FORMS': '1000',
+                'imp-0-liquidacion': self.liq.pk, 'imp-0-parte': parte, 'imp-0-importe': importe, 'imp-0-observaciones': ''}
+
+    def test_factura_m_y_su_pago_van_al_efectivo(self):
+        datos = {'fecha': '2026-10-02', 'tipo': 'FAC M', 'numero': '00020-00000411', 'importe': '100000',
+                 'motivo': 'cierre', 'observaciones': '', **self._imp(FACTURADA, '100000')}
+        self.client.post(reverse('marcoantonio:comprobante_nuevo'), datos)
+        fac = Comprobante.objects.get()
+        self.assertTrue(fac.en_negro)
+        self.assertEqual(fac.imputaciones.get().parte, EFECTIVO)
+        # Un pago con recibo A pero que paga la factura M también es en negro
+        datos = {'fecha': '2026-10-05', 'medio': 'transferencia', 'moneda': 'ARS', 'importe_origen': '100000',
+                 'tipo_cambio': '1', 'banco_referencia': '', 'tipo_recibo': 'REC A', 'numero_recibo': '1',
+                 'comprobante': fac.pk, 'observaciones': '', **self._imp(FACTURADA, '100000')}
+        self.client.post(reverse('marcoantonio:pago_nuevo'), datos)
+        pago = Pago.objects.get()
+        self.assertTrue(pago.en_negro)
+        self.assertEqual(pago.imputaciones.get().parte, EFECTIVO)
+        self.assertEqual(self.liq.saldo(FACTURADA), self.liq.importe(FACTURADA))
+        # Una factura A no se toca
+        datos = {'fecha': '2026-10-02', 'tipo': 'FAC A', 'numero': '00008-00000400', 'importe': '110500',
+                 'motivo': 'cierre', 'observaciones': '', **self._imp(FACTURADA, '110500')}
+        self.client.post(reverse('marcoantonio:comprobante_nuevo'), datos)
+        self.assertEqual(Comprobante.objects.get(tipo='FAC A').imputaciones.get().parte, FACTURADA)
+        self.assertContains(self.client.get(reverse('marcoantonio:comprobantes')), 'en negro')

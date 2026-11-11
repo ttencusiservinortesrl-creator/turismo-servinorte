@@ -52,6 +52,8 @@ sin importe en LIQUIDACIONES queda abierto. Verificado contra la hoja RESUMEN (s
   insumos (un insumo que no está en la lista se da de alta en el catálogo al cargarlo) y pagos recibidos
   (`Liquidacion.aplicaciones_pagos`: qué pago cubre cada salida). Pagos y comprobantes son MENSUALES (decisión de
   la usuaria): se imputan a mes + parte; el campo `servicio` de las imputaciones queda solo por compatibilidad.
+- Factura M / NC M: sin IVA, en negro → siempre parte en efectivo. Lo mismo un pago con REC M o vinculado a una
+  factura M (`Comprobante.en_negro`, `Pago.en_negro`, `forzar_efectivo`), al guardar y al importar.
 
 ## Decisiones
 - Cambiar parámetros no toca las cotizaciones guardadas; al editar y guardar una, se recalcula con los de hoy.

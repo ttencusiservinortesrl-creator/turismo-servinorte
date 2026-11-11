@@ -10,7 +10,7 @@ from django.views.decorators.http import require_POST
 from . import control, excel, importador
 from .forms import (ArticuloForm, ComprobanteForm, EntregaForm, ImportarForm, ImputacionesComprobanteFormSet,
                     ImputacionesPagoFormSet, LiquidacionForm, PagoForm, SalidaForm, ServicioForm)
-from .models import EFECTIVO, ESTADOS_PAGO, FACTURADA, PARTES, Articulo, Comprobante, EntregaInsumo, Liquidacion, Pago, ServicioMAT
+from .models import EFECTIVO, ESTADOS_PAGO, FACTURADA, PARTES, forzar_efectivo, Articulo, Comprobante, EntregaInsumo, Liquidacion, Pago, ServicioMAT
 
 
 def mat(vista):
@@ -310,7 +310,10 @@ def _guardar_con_imputaciones(request, objeto, form_clase, formset_clase, planti
             guardado = form.save()
             formset.instance = guardado
             formset.save()
+            cambiadas = forzar_efectivo(guardado)
         messages.success(request, f'{titulo} guardado.')
+        if cambiadas:
+            messages.info(request, 'Es "M" (en negro, sin IVA): lo apliqué a la parte en efectivo sin factura.')
         return redirect(destino)
     salidas_pendientes = [f for f in _filas_salidas(
         ServicioMAT.objects.select_related('liquidacion').prefetch_related(

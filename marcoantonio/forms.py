@@ -138,6 +138,8 @@ class ComprobanteForm(Estilado, forms.ModelForm):
         model = Comprobante
         fields = ['fecha', 'tipo', 'numero', 'importe', 'motivo', 'observaciones']
         widgets = {'fecha': FECHA}
+        help_texts = {'tipo': 'Factura M: sin IVA, en negro. Se aplica sola a la parte en efectivo.',
+                      'importe': 'En la factura M, el importe sin IVA.'}
 
 
 class PagoForm(Estilado, forms.ModelForm):
@@ -146,6 +148,7 @@ class PagoForm(Estilado, forms.ModelForm):
         fields = ['fecha', 'medio', 'moneda', 'importe_origen', 'tipo_cambio', 'banco_referencia', 'tipo_recibo',
                   'numero_recibo', 'comprobante', 'observaciones']
         widgets = {'fecha': FECHA}
+        help_texts = {'tipo_recibo': 'Recibo M (o pago de una factura M): en negro, va solo a la parte en efectivo.'}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

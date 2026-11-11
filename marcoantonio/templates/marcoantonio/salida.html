@@ -41,9 +41,9 @@
                 {% endfor %}
                 <tr class="fw-semibold table-light"><td>Total a cobrar</td><td class="num">$ {{ pagos.total|pesos:2 }}</td></tr>
                 <tr><td colspan="2" class="small">
-                    <span class="text-muted">Facturas del mes:</span>
-                    {% for c, imps in comprobantes_mes %}<a href="{% url 'marcoantonio:comprobante_editar' c.pk %}">{{ c }}</a>{% if not forloop.last %}, {% endif %}
-                    {% empty %}ninguna todavía · <a href="{% url 'marcoantonio:comprobante_nuevo' %}">cargar</a>{% endfor %}
+                    <span class="text-muted">Comprobantes del mes:</span>
+                    {% for c, imps in comprobantes_mes %}<a href="{% url 'marcoantonio:comprobante_editar' c.pk %}">{{ c }}</a>{% if c.en_negro %} <span class="text-muted">(en negro, sin IVA)</span>{% endif %}{% if not forloop.last %}, {% endif %}
+                    {% empty %}ninguno todavía · <a href="{% url 'marcoantonio:comprobante_nuevo' %}">cargar</a>{% endfor %}
                 </td></tr>
             </table>
         </div>
@@ -86,7 +86,7 @@
                 {% for a in aplicaciones %}
                     <tr><td>{{ a.pago.fecha|date:"d/m/Y" }}</td>
                         <td class="small"><a href="{% url 'marcoantonio:pago_editar' a.pago.pk %}">{{ a.pago.get_medio_display }}{% if a.pago.numero_recibo %} {{ a.pago.tipo_recibo }} {{ a.pago.numero_recibo }}{% endif %}</a>
-                            <span class="text-muted">· {% if a.parte == 'facturada' %}con factura{% else %}efectivo{% endif %}</span></td>
+                            <span class="text-muted">· {% if a.parte == 'facturada' %}con factura{% else %}efectivo{% if a.pago.en_negro %} (en negro){% endif %}{% endif %}</span></td>
                         <td class="num text-success">$ {{ a.importe|pesos:2 }}</td></tr>
                 {% empty %}<tr><td class="text-muted small">Sin pagos todavía.</td></tr>{% endfor %}
                 {% for clave, p in pagos.partes.items %}{% if p.importe %}
