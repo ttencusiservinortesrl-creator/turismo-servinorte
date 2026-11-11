@@ -50,6 +50,7 @@ def _formset_lineas(data=None, instance=None, inicial=None):
 @transaction.atomic
 def _guardar(request, form, formset, p):
     cot = form.save(commit=False)
+    precio_anterior = Cotizacion.objects.filter(pk=cot.pk).values_list('tarifa_neta', flat=True).first() if cot.pk else None
     resultado = calculo.calcular(p, {**form.cleaned_data, 'lineas': lineas_validas(formset)})
     cot.costo_total = resultado['costo']
     cot.detalle = calculo.para_guardar(resultado, p)
@@ -65,6 +66,9 @@ def _guardar(request, form, formset, p):
         linea.orden = orden
         linea.save()
     cot.actualizar_cargo_automatico()
+    from marcoantonio.desde_cotizacion import actualizar_precio
+    if precio_anterior is not None:
+        actualizar_precio(cot, precio_anterior)
     return cot
 
 
@@ -157,6 +161,12 @@ def detalle(request, pk):
         })
         if cot.estado == Cotizacion.ACEPTADA:
             contexto.update(_diagrama_para_venta(cot))
+            if request.user.has_perm('marcoantonio.view_liquidacion'):
+                from marcoantonio.desde_cotizacion import es_cliente_mat
+                from marcoantonio.models import ServicioMAT
+                from marcoantonio.desde_cotizacion import tarifas_sugeridas
+                contexto['mat'] = {'salida': ServicioMAT.objects.filter(cotizacion=cot).select_related('liquidacion').first(),
+                                   'es_cliente': es_cliente_mat(cot.cliente), 'tarifas': tarifas_sugeridas(cot)}
         else:
             contexto['asignaciones'] = list(cot.asignaciones.all())
     if cot.estado != Cotizacion.ANULADA:
@@ -303,6 +313,11 @@ def cambiar_estado(request, pk):
             messages.error(request, 'Esta venta ya tiene pagos o cargos cargados. Si el viaje se cancela, usá "Anular venta".')
             return redirect('cotizador:detalle', pk)
         cot.movimientos.filter(automatico=True).delete()
+    if cot.estado == Cotizacion.ACEPTADA:
+        from marcoantonio.desde_cotizacion import quitar_salida
+        aviso_mat = quitar_salida(cot)
+        if aviso_mat:
+            messages.warning(request, aviso_mat)
     asignadas = [a.unidad for a in cot.asignaciones.all()]
     if asignadas and nuevo != Cotizacion.ACEPTADA:
         cot.asignaciones.all().delete()
@@ -409,6 +424,10 @@ def anular_cotizacion(request, pk):
                     cotizacion=cot, fecha=timezone.localdate(), tipo=Movimiento.CARGO, importe=pagado,
                     concepto=f'Seña retenida por cancelación de COT {cot.numero} (sin reintegro)', creado_por=request.user)
                 avisos.append(f'lo pagado ($ {round(pagado):,}) queda como seña retenida'.replace(',', '.'))
+        from marcoantonio.desde_cotizacion import quitar_salida
+        aviso_mat = quitar_salida(cot)
+        if aviso_mat:
+            avisos.append(aviso_mat[0].lower() + aviso_mat[1:].rstrip('.'))
     cot.estado_antes_de_anular = cot.estado
     cot.estado = Cotizacion.ANULADA
     cot.anulada_en, cot.anulada_por, cot.motivo_anulacion = timezone.now(), request.user, motivo[:200]

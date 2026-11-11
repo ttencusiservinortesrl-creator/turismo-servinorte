@@ -40,6 +40,16 @@ imputan a liquidación + parte. Controles: comprobantes anticipados (antes del m
 factura vinculada, pagos/comprobantes sin imputar, parte facturada sin comprobante, saldos. La cuenta corriente solo
 cuenta liquidaciones cerradas. "Importar planilla" (superusuario) carga la planilla y reemplaza todo lo de MAT; un mes
 sin importe en LIQUIDACIONES queda abierto. Verificado contra la hoja RESUMEN (saldo −4.814.354,18 a favor de MAT).
+- Cada salida (`ServicioMAT`) muestra su estado de pago: pagos imputados a la salida + pagos "a cuenta del mes"
+  repartidos de la salida más vieja a la más nueva (`Liquidacion.reparto_pagos`). Menos de $1 de diferencia = pagada.
+- Cotización aceptada → botón "Pasar a Marco Antonio" (`marcoantonio/desde_cotizacion.py`): crea la salida en su mes
+  con fecha, recorrido, vehículo y tarifa vendida (mínima/intermedia/óptima de los márgenes del cálculo, o a mano;
+  viene con el precio de la cotización, sin IVA). Si cambia el precio de la cotización, la salida lo sigue solo si
+  estaba vendida a ese mismo precio. Al anular o volver atrás la cotización se borra la salida si no tiene insumos
+  ni pagos. Las colaciones de la cotización ya están en el precio: van solo como nota, no como insumo.
+- PENDIENTE: la usuaria pidió rehacer Marco Antonio como "ficha por salida" (lista de salidas → ficha con precio,
+  insumos, cómo se cobra y pagos). Hay que preguntarle si los pagos y facturas son por salida o por mes, y si se
+  reimporta la planilla.
 
 ## Decisiones
 - Cambiar parámetros no toca las cotizaciones guardadas; al editar y guardar una, se recalcula con los de hoy.

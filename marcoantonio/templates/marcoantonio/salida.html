@@ -17,6 +17,7 @@
             <div class="card-header">La salida</div>
             <table class="table table-sm mb-0">
                 <tr><td>Unidad</td><td>{{ sal.unidad }}</td></tr>
+                {% if sal.cotizacion %}<tr><td>Cotización</td><td><a href="{% url 'cotizador:detalle' sal.cotizacion.pk %}">COT {{ sal.cotizacion.numero }}</a></td></tr>{% endif %}
                 <tr><td>Mes</td><td><a href="{% url 'marcoantonio:liquidacion' liq.pk %}">{{ liq.nombre }}</a>{% if not liq.cerrada %} <span class="badge estado-pendiente">abierta</span>{% endif %}</td></tr>
                 <tr><td>Precio <span class="small text-muted">({{ sal.get_tarifa_elegida_display|default:"sin elegir" }})</span></td><td class="num">$ {{ sal.tarifa|pesos:2 }}</td></tr>
                 <tr><td>Agua <span class="small text-muted">({{ sal.unidades_agua }} × $ {{ liq.precio_agua|pesos:2 }})</span></td><td class="num">$ {{ sal.costo_agua|pesos:2 }}</td></tr>

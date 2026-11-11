@@ -91,6 +91,50 @@ document.querySelectorAll('.anular-mov').forEach(f => f.addEventListener('submit
     </div>
 </div>
 
+{% if mat %}
+<div class="card shadow-sm mb-3 {% if mat.es_cliente and not mat.salida %}border-primary{% endif %}">
+    <div class="card-body d-flex flex-wrap gap-2 align-items-center">
+        {% if mat.salida %}
+            <span class="me-auto"><i class="bi bi-briefcase text-primary"></i> Ya está en <b>Marco Antonio</b> como salida del {{ mat.salida.fecha|date:"d/m/Y" }} ({{ mat.salida.liquidacion.nombre }}).</span>
+            <a class="btn btn-sm btn-outline-primary" href="{% url 'marcoantonio:salida' mat.salida.pk %}"><i class="bi bi-box-arrow-up-right"></i> Ver la salida</a>
+        {% else %}
+            <span class="me-auto"><i class="bi bi-briefcase text-primary"></i> {% if mat.es_cliente %}Es un viaje de <b>Marco Antonio Tours</b>: pasalo a su sección para liquidarlo con sus insumos.{% else %}¿Es un viaje de Marco Antonio Tours?{% endif %}
+                <span class="small text-muted d-block">Se crea la salida con la fecha, el recorrido y el vehículo. Elegí la tarifa vendida (todas sin IVA) o tipeala.</span></span>
+            <form class="w-100" method="post" action="{% url 'marcoantonio:desde_cotizacion' cot.pk %}" onsubmit="return confirm('¿Pasar esta cotización a Marco Antonio como una salida?');">{% csrf_token %}
+                <div class="row g-2 align-items-end">
+                    <div class="col-6 col-md">
+                        <label class="form-check-label small"><input class="form-check-input me-1" type="radio" name="tarifa_elegida" value="minima"> Mínima</label>
+                        <input class="form-control form-control-sm" type="number" step="0.01" min="0" name="tarifa_minima" value="{{ mat.tarifas.minima|stringformat:'s' }}">
+                    </div>
+                    <div class="col-6 col-md">
+                        <label class="form-check-label small"><input class="form-check-input me-1" type="radio" name="tarifa_elegida" value="intermedia"> Intermedia</label>
+                        <input class="form-control form-control-sm" type="number" step="0.01" min="0" name="tarifa_intermedia" value="{{ mat.tarifas.intermedia|stringformat:'s' }}">
+                    </div>
+                    <div class="col-6 col-md">
+                        <label class="form-check-label small"><input class="form-check-input me-1" type="radio" name="tarifa_elegida" value="optima"> Óptima</label>
+                        <input class="form-control form-control-sm" type="number" step="0.01" min="0" name="tarifa_optima" value="{{ mat.tarifas.optima|stringformat:'s' }}">
+                    </div>
+                    <div class="col-6 col-md">
+                        <label class="form-check-label small"><input class="form-check-input me-1" type="radio" name="tarifa_elegida" value="otra" checked> Otra (a mano)</label>
+                        <input class="form-control form-control-sm" type="number" step="0.01" min="0" name="tarifa_otra" value="{{ cot.tarifa_neta|stringformat:'s' }}">
+                    </div>
+                    <div class="col-12 col-md-auto">
+                        <button class="btn {% if mat.es_cliente %}btn-primary{% else %}btn-outline-primary{% endif %} w-100" type="submit"><i class="bi bi-send"></i> Pasar a Marco Antonio</button>
+                    </div>
+                </div>
+                <div class="form-text">Mínima, intermedia y óptima salen de los márgenes del cálculo; "a mano" viene con el precio de la cotización ($ {{ cot.tarifa_neta|pesos }}). Podés cambiar cualquiera: al tocar un importe queda elegido.</div>
+            </form>
+            <script>document.querySelectorAll('input[name^="tarifa_"][type=number]').forEach(function (i) {
+                i.addEventListener('input', function () {
+                    var r = document.querySelector('input[name=tarifa_elegida][value="' + i.name.replace('tarifa_', '') + '"]');
+                    if (r) r.checked = true;
+                });
+            });</script>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
 {% if cot.fue_venta %}
 <div class="card shadow-sm mb-3 border-success">
     <div class="card-header">Cuenta corriente de la venta</div>

@@ -171,6 +171,8 @@ class ServicioMAT(models.Model):
     tarifa_otra = models.DecimalField('Tarifa a mano', max_digits=14, decimal_places=2, null=True, blank=True)
     unidades_agua = models.PositiveIntegerField('Unidades de agua', default=0)
     observaciones = models.CharField(max_length=200, blank=True)
+    cotizacion = models.OneToOneField('cotizador.Cotizacion', verbose_name='Viene de la cotización', null=True, blank=True,
+                                      on_delete=models.SET_NULL, related_name='salida_mat')
 
     class Meta:
         ordering = ['fecha', 'id']

@@ -33,4 +33,5 @@ urlpatterns = [
     path('<str:tipo>/<int:pk>/anular/', views.anular, name='anular'),
     path('importar/', views.importar, name='importar'),
     path('excel/', views.descargar_excel, name='excel'),
+    path('desde-cotizacion/<int:cot_pk>/', views.desde_cotizacion, name='desde_cotizacion'),
 ]

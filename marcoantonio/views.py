@@ -382,3 +382,23 @@ def descargar_excel(request):
     respuesta = HttpResponse(excel.generar(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     respuesta['Content-Disposition'] = f'attachment; filename="Marco_Antonio_Tours_{timezone.localdate():%d-%m-%Y}.xlsx"'
     return respuesta
+
+
+# ---------- Desde el cotizador ----------
+
+@mat
+@require_POST
+def desde_cotizacion(request, cot_pk):
+    from cotizador.models import Cotizacion
+    from .desde_cotizacion import crear_salida, leer_tarifas
+    cot = get_object_or_404(Cotizacion, pk=cot_pk, estado=Cotizacion.ACEPTADA)
+    tarifas, error = leer_tarifas(request.POST)
+    if error:
+        messages.error(request, error)
+        return redirect('cotizador:detalle', cot.pk)
+    sal = crear_salida(cot, tarifas)
+    messages.success(request, f'Listo: la cotización {cot.numero} ya es una salida de Marco Antonio '
+                              f'({sal.liquidacion.nombre}). Cargale los insumos que lleve.')
+    if sal.liquidacion.cerrada:
+        messages.warning(request, f'Ojo: la liquidación de {sal.liquidacion.nombre} ya estaba cerrada.')
+    return redirect('marcoantonio:salida', sal.pk)

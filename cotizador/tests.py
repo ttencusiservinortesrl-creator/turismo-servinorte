@@ -749,3 +749,66 @@ class AnulacionDiagramaTest(DiagramaVistasTest):
             contenido = dg.anotar(f.read(), '61', date(2026, 10, 20), date(2026, 10, 20), ['OTRO CLIENTE'])
         with self.assertRaisesRegex(dg.ErrorDiagrama, 'Borrala a mano'):
             dg.quitar(contenido, '61', date(2026, 10, 20), date(2026, 10, 20), 'Mauricio Vivas')
+
+
+class MarcoAntonioDesdeCotizacionTest(BaseVistas):
+    def test_pasar_cotizacion_aceptada_a_mat(self):
+        from marcoantonio.models import Liquidacion, ServicioMAT
+        self.client.post(reverse('cotizador:nueva'), self.post_datos(nuevo_cliente='Marco Antonio Tours',
+                                                                      colaciones_cantidad='40', colaciones_precio='1500'))
+        cot = Cotizacion.objects.get()
+        # Pendiente: todavía no se ofrece
+        self.assertNotContains(self.client.get(reverse('cotizador:detalle', args=[cot.pk])), 'Pasar a Marco Antonio')
+        self.client.post(reverse('cotizador:cambiar_estado', args=[cot.pk]), {'estado': 'aceptada'})
+        self.assertContains(self.client.get(reverse('cotizador:detalle', args=[cot.pk])), 'Pasar a Marco Antonio')
+        self.assertContains(self.client.get(reverse('cotizador:detalle', args=[cot.pk])), 'name="tarifa_intermedia"')
+        # Sin importe en la tarifa elegida no se pasa
+        self.client.post(reverse('marcoantonio:desde_cotizacion', args=[cot.pk]),
+                         {'tarifa_elegida': 'optima', 'tarifa_optima': '', 'tarifa_otra': '1700000'})
+        self.assertFalse(ServicioMAT.objects.exists())
+        # Tarifa tipeada a mano (formato argentino)
+        r = self.client.post(reverse('marcoantonio:desde_cotizacion', args=[cot.pk]),
+                             {'tarifa_elegida': 'otra', 'tarifa_minima': '1500000', 'tarifa_intermedia': '1600000',
+                              'tarifa_optima': '1900000', 'tarifa_otra': '1.700.000,00'})
+        sal = ServicioMAT.objects.get()
+        self.assertEqual((sal.tarifa_minima, sal.tarifa_optima), (Decimal('1500000'), Decimal('1900000')))
+        self.assertRedirects(r, reverse('marcoantonio:salida', args=[sal.pk]))
+        self.assertEqual((sal.fecha, sal.tarifa, sal.cotizacion), (date(2026, 11, 9), Decimal('1700000'), cot))
+        self.assertEqual(sal.liquidacion.periodo, date(2026, 11, 1))
+        self.assertIn('Orán', sal.servicio)
+        self.assertIn('40 colaciones', sal.observaciones)
+        # Dos veces no la duplica
+        self.client.post(reverse('marcoantonio:desde_cotizacion', args=[cot.pk]))
+        self.assertEqual(ServicioMAT.objects.count(), 1)
+        self.assertContains(self.client.get(reverse('cotizador:detalle', args=[cot.pk])), 'Ya está en')
+        self.assertContains(self.client.get(reverse('marcoantonio:salida', args=[sal.pk])), f'COT {cot.numero}')
+        # Si cambia el precio de la cotización, la salida lo sigue
+        self.client.post(reverse('cotizador:editar', args=[cot.pk]),
+                         self.post_datos(numero=cot.numero, nuevo_cliente='', cliente=cot.cliente.pk, tarifa_neta='1800000',
+                                         colaciones_cantidad='40', colaciones_precio='1500'))
+        sal.refresh_from_db()
+        self.assertEqual(sal.tarifa, Decimal('1800000'))
+        # Al anular la venta, la salida sin nada cargado se borra
+        self.client.post(reverse('cotizador:anular', args=[cot.pk]), {'motivo': 'Se cayó el viaje', 'pagado': 'retener'})
+        self.assertFalse(ServicioMAT.objects.exists())
+        self.assertTrue(Liquidacion.objects.exists())
+
+    def test_elegir_tarifa_intermedia(self):
+        from marcoantonio.desde_cotizacion import tarifas_sugeridas
+        from marcoantonio.models import ServicioMAT
+        self.client.post(reverse('cotizador:nueva'), self.post_datos())
+        cot = Cotizacion.objects.get()
+        self.client.post(reverse('cotizador:cambiar_estado', args=[cot.pk]), {'estado': 'aceptada'})
+        sug = tarifas_sugeridas(cot)
+        self.assertTrue(0 < sug['minima'] < sug['intermedia'] < sug['optima'])
+        self.client.post(reverse('marcoantonio:desde_cotizacion', args=[cot.pk]),
+                         {'tarifa_elegida': 'intermedia', 'tarifa_minima': str(sug['minima']),
+                          'tarifa_intermedia': str(sug['intermedia']), 'tarifa_optima': str(sug['optima']),
+                          'tarifa_otra': '1700000'})
+        sal = ServicioMAT.objects.get()
+        self.assertEqual((sal.tarifa_elegida, sal.tarifa, sal.tarifa_otra), ('intermedia', sug['intermedia'], None))
+        # Si después cambia el precio de la cotización, no pisa la tarifa elegida
+        self.client.post(reverse('cotizador:editar', args=[cot.pk]),
+                         self.post_datos(numero=cot.numero, nuevo_cliente='', cliente=cot.cliente.pk, tarifa_neta='1800000'))
+        sal.refresh_from_db()
+        self.assertEqual(sal.tarifa, sug['intermedia'])
