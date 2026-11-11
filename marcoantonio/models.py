@@ -17,6 +17,18 @@ FACTURADA, EFECTIVO = 'facturada', 'efectivo'
 PARTES = [(FACTURADA, 'Parte facturada (neto + IVA)'), (EFECTIVO, 'Parte en efectivo sin factura')]
 
 
+def estado_de(importe, pagado):
+    # Menos de $1 de diferencia se toma como pagado (redondeo de centavos al repartir).
+    if importe <= Decimal('0.01'):
+        return 'sin_importe'
+    if importe - pagado < 1:
+        return 'pagada'
+    return 'parcial' if pagado >= 1 else 'pendiente'
+
+
+ESTADOS_PAGO = {'pagada': 'Pagada', 'parcial': 'Pago parcial', 'pendiente': 'Pendiente', 'sin_importe': 'Sin precio'}
+
+
 def redondear(valor):
     return Decimal(valor).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
@@ -109,6 +121,33 @@ class Liquidacion(models.Model):
     def sin_comprobante(self, parte):
         return self.importe(parte) - self.comprobado(parte)
 
+    def importe_de_salidas(self, parte):
+        return sum((sal.importe(parte) for sal in self.servicios.all()), CERO)
+
+    def resto_del_mes(self, parte):
+        """Lo que no es de ninguna salida: insumos del mes sin salida y, si el neto se cargó a mano, la diferencia."""
+        return self.importe(parte) - self.importe_de_salidas(parte)
+
+    def reparto_pagos(self):
+        """Cuánto está pagado de cada salida, por parte: {salida_id: {parte: pagado}, None: {parte: resto}}.
+
+        Lo aplicado a una salida cuenta para esa salida. Lo aplicado al mes en general se reparte entre las salidas
+        del mes de la más vieja a la más nueva; si sobra, queda para el resto del mes (insumos sin salida, ajuste)."""
+        salidas = list(self.servicios.all())
+        reparto = {sal.pk: {} for sal in salidas}
+        reparto[None] = {}
+        for parte, _ in PARTES:
+            imputaciones = [i for i in self.imputaciones_pagos.all() if i.parte == parte and not i.pago.anulado]
+            del_mes = sum((i.importe for i in imputaciones if i.servicio_id is None), CERO)
+            for sal in salidas:
+                directo = sum((i.importe for i in imputaciones if i.servicio_id == sal.pk), CERO)
+                falta = max(sal.importe(parte) - directo, CERO)
+                tomado = min(del_mes, falta)
+                del_mes -= tomado
+                reparto[sal.pk][parte] = {'directo': directo, 'repartido': tomado, 'pagado': directo + tomado}
+            reparto[None][parte] = del_mes
+        return reparto
+
     def resumen(self):
         partes = {}
         for parte, nombre in PARTES:
@@ -135,7 +174,7 @@ class ServicioMAT(models.Model):
 
     class Meta:
         ordering = ['fecha', 'id']
-        verbose_name = 'servicio'
+        verbose_name = 'salida'
 
     def __str__(self):
         return f'{self.fecha:%d/%m} {self.servicio}'
@@ -149,6 +188,38 @@ class ServicioMAT(models.Model):
     @property
     def costo_agua(self):
         return redondear(self.unidades_agua * self.liquidacion.precio_agua)
+
+    def total_insumos(self):
+        return redondear(sum((e.total for e in self.insumos.all()), CERO))
+
+    def neto(self):
+        """Precio + agua + insumos que llevó la salida."""
+        return redondear(self.tarifa + self.costo_agua + self.total_insumos())
+
+    def importe(self, parte):
+        liq = self.liquidacion
+        facturada_neto = redondear(self.neto() * liq.porcentaje_facturado / 100)
+        if parte == FACTURADA:
+            return facturada_neto + redondear(facturada_neto * liq.porcentaje_iva / 100)
+        return redondear(self.neto() - facturada_neto)
+
+    def total(self):
+        return self.importe(FACTURADA) + self.importe(EFECTIVO)
+
+    def estado_pagos(self, reparto=None):
+        """Por parte: importe, pagado (directo + repartido del mes), saldo y estado. Más el estado general."""
+        reparto = (reparto or self.liquidacion.reparto_pagos())[self.pk]
+        partes = {}
+        for parte, nombre in PARTES:
+            importe = self.importe(parte)
+            pagado = reparto[parte]['pagado']
+            saldo = importe - pagado
+            partes[parte] = {'nombre': nombre, 'importe': importe, 'pagado': pagado, 'saldo': saldo,
+                             'directo': reparto[parte]['directo'], 'repartido': reparto[parte]['repartido'],
+                             'estado': estado_de(importe, pagado)}
+        total, pagado = self.total(), partes[FACTURADA]['pagado'] + partes[EFECTIVO]['pagado']
+        return {'partes': partes, 'total': total, 'pagado': pagado, 'saldo': total - pagado,
+                'estado': estado_de(total, pagado)}
 
 
 class Articulo(models.Model):
@@ -170,6 +241,8 @@ class Articulo(models.Model):
 
 class EntregaInsumo(models.Model):
     liquidacion = models.ForeignKey(Liquidacion, on_delete=models.CASCADE, related_name='entregas')
+    servicio = models.ForeignKey(ServicioMAT, null=True, blank=True, on_delete=models.SET_NULL, related_name='insumos',
+                                 verbose_name='Salida', help_text='Vacío = insumos del mes, sin una salida en particular.')
     fecha = models.DateField()
     articulo = models.ForeignKey(Articulo, on_delete=models.PROTECT, related_name='entregas', verbose_name='Artículo')
     cantidad = models.DecimalField(max_digits=10, decimal_places=2)
@@ -232,6 +305,8 @@ class ImputacionComprobante(models.Model):
     comprobante = models.ForeignKey(Comprobante, on_delete=models.CASCADE, related_name='imputaciones')
     liquidacion = models.ForeignKey(Liquidacion, on_delete=models.PROTECT, related_name='imputaciones_comprobantes',
                                     verbose_name='Liquidación')
+    servicio = models.ForeignKey(ServicioMAT, null=True, blank=True, on_delete=models.SET_NULL,
+                                 related_name='imputaciones_comprobantes', verbose_name='Salida')
     parte = models.CharField(max_length=10, choices=PARTES)
     importe = models.DecimalField(max_digits=16, decimal_places=2)
     observaciones = models.CharField(max_length=200, blank=True)
@@ -283,6 +358,9 @@ class ImputacionPago(models.Model):
     pago = models.ForeignKey(Pago, on_delete=models.CASCADE, related_name='imputaciones')
     liquidacion = models.ForeignKey(Liquidacion, on_delete=models.PROTECT, related_name='imputaciones_pagos',
                                     verbose_name='Liquidación')
+    servicio = models.ForeignKey(ServicioMAT, null=True, blank=True, on_delete=models.SET_NULL,
+                                 related_name='imputaciones_pagos', verbose_name='Salida',
+                                 help_text='Vacío = a cuenta del mes (se reparte entre las salidas de la más vieja a la más nueva).')
     parte = models.CharField(max_length=10, choices=PARTES)
     importe = models.DecimalField(max_digits=16, decimal_places=2)
     observaciones = models.CharField(max_length=200, blank=True)

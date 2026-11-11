@@ -9,14 +9,19 @@
 <div class="card">
     <div class="table-responsive">
         <table class="table table-sm table-hover align-middle mb-0">
-            <thead><tr><th>Fecha</th><th>Artículo</th><th>Sección</th><th class="num">Cantidad</th><th class="num">Precio</th><th class="num">Importe</th><th>Obs.</th><th></th></tr></thead>
+            <thead><tr><th>Fecha</th><th>Artículo</th><th>Sección</th><th class="num">Cantidad</th><th class="num">Precio</th><th class="num">Importe</th><th>Salida</th><th>Obs.</th><th></th></tr></thead>
             <tbody>
             {% for e in entregas %}
                 <tr><td>{{ e.fecha|date:"d/m/Y" }}</td><td>{{ e.articulo.codigo }} · {{ e.articulo.nombre }}</td><td class="small">{{ e.articulo.get_categoria_display }}</td>
                     <td class="num">{{ e.cantidad|floatformat:"-2" }}</td><td class="num">$ {{ e.precio_unitario|pesos:2 }}</td><td class="num">$ {{ e.total|pesos:2 }}</td>
+                    <td><form method="post" action="{% url 'marcoantonio:entrega_asignar' liq.pk e.pk %}">{% csrf_token %}
+                        <select class="form-select form-select-sm" name="servicio" onchange="this.form.submit()">
+                            <option value="">— del mes —</option>
+                            {% for s in salidas %}<option value="{{ s.pk }}" {% if e.servicio_id == s.pk %}selected{% endif %}>{{ s.fecha|date:"d/m" }} {{ s.servicio|truncatechars:25 }}</option>{% endfor %}
+                        </select></form></td>
                     <td class="small">{{ e.observaciones }}</td>
                     <td class="text-end"><form method="post" action="{% url 'marcoantonio:entrega_borrar' liq.pk e.pk %}" onsubmit="return confirm('¿Borrar esta entrega?');">{% csrf_token %}<button class="btn btn-sm btn-link text-danger p-0" type="submit"><i class="bi bi-trash"></i></button></form></td></tr>
-            {% empty %}<tr><td colspan="8" class="text-center text-muted py-3">Sin entregas.</td></tr>{% endfor %}
+            {% empty %}<tr><td colspan="9" class="text-center text-muted py-3">Sin entregas.</td></tr>{% endfor %}
             </tbody>
         </table>
     </div>

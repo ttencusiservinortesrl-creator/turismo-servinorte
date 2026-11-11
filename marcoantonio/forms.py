@@ -50,7 +50,31 @@ class LiquidacionForm(Estilado, forms.ModelForm):
         return super().save(commit)
 
 
-class ServicioForm(Estilado, forms.ModelForm):
+class TarifasOpcionales:
+    """Las tres tarifas no son obligatorias: si se dejan vacías quedan en 0."""
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for c in ('tarifa_minima', 'tarifa_intermedia', 'tarifa_optima', 'unidades_agua'):
+            self.fields[c].required = False
+
+    def clean(self):
+        datos = super().clean()
+        for c in ('tarifa_minima', 'tarifa_intermedia', 'tarifa_optima', 'unidades_agua'):
+            if datos.get(c) in (None, ''):
+                datos[c] = 0
+        return datos
+
+
+class SalidaForm(Estilado, TarifasOpcionales, forms.ModelForm):
+    """Salida nueva: el mes (liquidación) se toma de la fecha."""
+    class Meta:
+        model = ServicioMAT
+        fields = ['fecha', 'unidad', 'servicio', 'tarifa_minima', 'tarifa_intermedia', 'tarifa_optima', 'tarifa_elegida',
+                  'tarifa_otra', 'unidades_agua', 'observaciones']
+        widgets = {'fecha': FECHA}
+
+
+class ServicioForm(Estilado, TarifasOpcionales, forms.ModelForm):
     class Meta:
         model = ServicioMAT
         fields = ['fecha', 'unidad', 'servicio', 'tarifa_minima', 'tarifa_intermedia', 'tarifa_optima', 'tarifa_elegida',
@@ -62,6 +86,7 @@ class EntregaForm(Estilado, forms.ModelForm):
     class Meta:
         model = EntregaInsumo
         fields = ['fecha', 'articulo', 'cantidad', 'observaciones']
+        # La salida (o "del mes") la pone la pantalla desde donde se carga.
         widgets = {'fecha': FECHA}
 
     def __init__(self, *args, **kwargs):
@@ -102,11 +127,28 @@ class PagoForm(Estilado, forms.ModelForm):
 
 class ImputacionForm(Estilado, forms.ModelForm):
     class Meta:
-        fields = ['liquidacion', 'parte', 'importe', 'observaciones']
+        fields = ['servicio', 'liquidacion', 'parte', 'importe', 'observaciones']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['liquidacion'].label_from_instance = lambda l: f'{l.codigo} · {l.nombre}'
+        self.fields['liquidacion'].required = False
+        self.fields['liquidacion'].help_text = 'Si elegís una salida, se completa solo.'
+        self.fields['servicio'].queryset = ServicioMAT.objects.select_related('liquidacion').order_by('-fecha')
+        self.fields['servicio'].label_from_instance = lambda s: f'{s.fecha:%d/%m/%Y} · {s.servicio} · {s.unidad}'
+        self.fields['servicio'].empty_label = '— a cuenta del mes —'
+
+    def clean(self):
+        datos = super().clean()
+        salida, liquidacion = datos.get('servicio'), datos.get('liquidacion')
+        if salida and liquidacion and salida.liquidacion_id != liquidacion.pk:
+            self.add_error('liquidacion', 'La salida es de otro mes.')
+        elif salida:
+            datos['liquidacion'] = salida.liquidacion
+            self.instance.liquidacion = salida.liquidacion
+        elif not liquidacion and datos.get('importe'):
+            self.add_error('liquidacion', 'Elegí la salida o el mes.')
+        return datos
 
 
 class ImputacionPagoForm(ImputacionForm):

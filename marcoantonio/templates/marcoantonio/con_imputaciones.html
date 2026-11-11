@@ -24,19 +24,36 @@
                     {% for f in formset %}
                         <div class="row g-2 align-items-end border-bottom pb-2 mb-2">
                             {% for h in f.hidden_fields %}{{ h }}{% endfor %}
-                            {% include '_campo.html' with campo=f.liquidacion clase='col-md-4' %}
-                            {% include '_campo.html' with campo=f.parte clase='col-md-4' %}
-                            {% include '_campo.html' with campo=f.importe clase='col-md-3' %}
+                            {% include '_campo.html' with campo=f.servicio clase='col-md-6' %}
+                            {% include '_campo.html' with campo=f.liquidacion clase='col-md-6' %}
+                            {% include '_campo.html' with campo=f.parte clase='col-md-6' %}
+                            {% include '_campo.html' with campo=f.importe clase='col-md-5' %}
                             {% if f.instance.pk %}<div class="col-md-1 mb-2 small"><label class="form-check-label">{{ f.DELETE }} quitar</label></div>{% endif %}
                             {% include '_campo.html' with campo=f.observaciones clase='col-12' %}
                         </div>
                     {% endfor %}
-                    <div class="form-text">Se puede repartir entre varias liquidaciones. Si quedan renglones vacíos no pasa nada; guardá y volvé a entrar para tener más.</div>
+                    <div class="form-text">Elegí la salida que paga (el mes se completa solo) o dejala "a cuenta del mes" y elegí el mes. Se puede repartir entre varias. Si quedan renglones vacíos no pasa nada; guardá y volvé a entrar para tener más.</div>
                 </div>
             </div>
             <button class="btn btn-primary btn-lg" type="submit"><i class="bi bi-check-lg"></i> Guardar</button>
         </div>
         <div class="col-lg-5">
+            {% if titulo == 'Pago' %}
+            <div class="card mb-3">
+                <div class="card-header">Salidas con saldo</div>
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <thead><tr><th>Salida</th><th class="num">Falta fact.</th><th class="num">Falta efvo.</th></tr></thead>
+                        <tbody>
+                        {% for f in salidas_pendientes %}
+                            <tr><td class="small">{{ f.salida.fecha|date:"d/m/Y" }} · {{ f.salida.servicio }}</td>
+                                <td class="num">{{ f.pagos.partes.facturada.saldo|pesos }}</td><td class="num">{{ f.pagos.partes.efectivo.saldo|pesos }}</td></tr>
+                        {% empty %}<tr><td class="text-muted small" colspan="3">Todas las salidas están pagadas.</td></tr>{% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
             <div class="card">
                 <div class="card-header">Saldos de cada liquidación</div>
                 <div class="table-responsive">

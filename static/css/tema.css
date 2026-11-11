@@ -226,3 +226,8 @@ a:hover { text-decoration: underline; }
 .mov-anulado td.num { text-decoration: line-through; }
 
 .fila-manual > td { background: #fff8e6 !important; font-weight: 600; }
+
+.pago-pagada { background: #daf3e6; color: #11663f; }
+.pago-parcial { background: #fff4d6; color: #8a5a00; }
+.pago-pendiente { background: #fde7e7; color: #8f1d1d; }
+.pago-sin_importe { background: #eceff4; color: #6b7487; }

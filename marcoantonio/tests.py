@@ -185,3 +185,69 @@ class VistasTest(TestCase):
     def test_sin_permiso(self):
         self.client.force_login(User.objects.create_user('otro', password='x'))
         self.assertEqual(self.client.get(reverse('marcoantonio:tablero')).status_code, 403)
+
+
+class SalidasTest(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_superuser('tatiana', 't@x.com', 'clave-segura-123')
+        self.client.force_login(self.user)
+
+    def _salida(self, liq, dia, precio):
+        return ServicioMAT.objects.create(liquidacion=liq, fecha=date(2026, 10, dia), unidad='DP', servicio=f'S{dia}',
+                                          tarifa_elegida='otra', tarifa_otra=precio)
+
+    def test_reparto_y_estados(self):
+        liq = Liquidacion.objects.create(periodo=date(2026, 10, 1), porcentaje_facturado=0)
+        s1, s2 = self._salida(liq, 5, 1000000), self._salida(liq, 20, 500000)
+        art = Articulo.objects.create(codigo=7, nombre='Alfajor', precio=100)
+        EntregaInsumo.objects.create(liquidacion=liq, servicio=s1, fecha=date(2026, 10, 5), articulo=art,
+                                     cantidad=10, precio_unitario=100)
+        self.assertEqual(s1.neto(), Decimal('1001000'))
+        self.assertEqual(s1.estado_pagos()['estado'], 'pendiente')
+        # Pago a cuenta del mes: se reparte de la salida más vieja a la más nueva
+        pago = Pago.objects.create(fecha=date(2026, 10, 25), medio='efectivo', importe_origen=1200000)
+        ImputacionPago.objects.create(pago=pago, liquidacion=liq, parte=EFECTIVO, importe=1200000)
+        rep = liq.reparto_pagos()
+        self.assertEqual(s1.estado_pagos(rep)['estado'], 'pagada')
+        e2 = s2.estado_pagos(rep)
+        self.assertEqual(e2['estado'], 'parcial')
+        self.assertEqual(e2['saldo'], Decimal('301000'))
+        # Pago directo a la segunda salida
+        pago2 = Pago.objects.create(fecha=date(2026, 10, 28), medio='efectivo', importe_origen=301000)
+        ImputacionPago.objects.create(pago=pago2, liquidacion=liq, servicio=s2, parte=EFECTIVO, importe=301000)
+        self.assertEqual(s2.estado_pagos(liq.reparto_pagos())['estado'], 'pagada')
+
+    def test_pantallas_de_salidas(self):
+        datos = {'fecha': '2026-10-14', 'unidad': 'DOBLE PISO', 'servicio': 'CAFAYATE', 'tarifa_minima': '',
+                 'tarifa_intermedia': '', 'tarifa_optima': '', 'tarifa_elegida': 'otra', 'tarifa_otra': '2000000',
+                 'unidades_agua': '0', 'observaciones': ''}
+        r = self.client.post(reverse('marcoantonio:salida_nueva'), datos)
+        sal = ServicioMAT.objects.get()
+        self.assertRedirects(r, reverse('marcoantonio:salida', args=[sal.pk]))
+        self.assertEqual(sal.liquidacion.periodo, date(2026, 10, 1))
+        art = Articulo.objects.create(codigo=3, nombre='Agua saborizada', precio=500)
+        self.client.post(reverse('marcoantonio:salida_insumo', args=[sal.pk]),
+                         {'fecha': '2026-10-14', 'articulo': art.pk, 'cantidad': '40', 'observaciones': ''})
+        self.assertEqual(sal.total_insumos(), Decimal('20000.00'))
+        r = self.client.get(reverse('marcoantonio:salida', args=[sal.pk]))
+        self.assertContains(r, 'Agua saborizada')
+        self.assertContains(r, 'Pendiente')
+        self.assertContains(self.client.get(reverse('marcoantonio:salidas')), 'CAFAYATE')
+        self.assertContains(self.client.get(reverse('marcoantonio:liquidacion', args=[sal.liquidacion_id])), 'CAFAYATE')
+        r = self.client.get(reverse('marcoantonio:pago_nuevo') + f'?salida={sal.pk}')
+        self.assertContains(r, 'CAFAYATE')
+        # Pago imputado directo a la salida (el mes se completa solo)
+        total = sal.total()
+        datos = {'fecha': '2026-10-30', 'medio': 'efectivo', 'moneda': 'ARS', 'importe_origen': str(total),
+                 'tipo_cambio': '1', 'banco_referencia': '', 'tipo_recibo': '', 'numero_recibo': '',
+                 'comprobante': '', 'observaciones': '',
+                 'imp-TOTAL_FORMS': '2', 'imp-INITIAL_FORMS': '0', 'imp-MIN_NUM_FORMS': '0', 'imp-MAX_NUM_FORMS': '1000',
+                 'imp-0-servicio': sal.pk, 'imp-0-liquidacion': '', 'imp-0-parte': EFECTIVO,
+                 'imp-0-importe': str(sal.importe(EFECTIVO)), 'imp-0-observaciones': '',
+                 'imp-1-servicio': sal.pk, 'imp-1-liquidacion': '', 'imp-1-parte': FACTURADA,
+                 'imp-1-importe': str(sal.importe(FACTURADA)), 'imp-1-observaciones': ''}
+        r = self.client.post(reverse('marcoantonio:pago_nuevo'), datos)
+        self.assertEqual(r.status_code, 302)
+        self.assertEqual(ImputacionPago.objects.filter(liquidacion=sal.liquidacion).count(), 2)
+        self.assertEqual(sal.estado_pagos()['estado'], 'pagada')
+        self.assertContains(self.client.get(reverse('marcoantonio:salidas') + '?estado=pagadas'), 'CAFAYATE')
