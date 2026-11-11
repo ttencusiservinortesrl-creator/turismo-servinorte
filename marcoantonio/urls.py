@@ -5,7 +5,8 @@ from . import views
 app_name = 'marcoantonio'
 
 urlpatterns = [
-    path('', views.tablero, name='tablero'),
+    path('', views.salidas, name='salidas'),
+    path('resumen/', views.tablero, name='tablero'),
     path('liquidaciones/nueva/', views.liquidacion_nueva, name='liquidacion_nueva'),
     path('liquidaciones/<int:pk>/', views.liquidacion, name='liquidacion'),
     path('liquidaciones/<int:pk>/editar/', views.liquidacion_editar, name='liquidacion_editar'),
@@ -16,7 +17,6 @@ urlpatterns = [
     path('liquidaciones/<int:pk>/entregas/', views.entregas, name='entregas'),
     path('liquidaciones/<int:pk>/entregas/nueva/', views.entrega_guardar, name='entrega_nueva'),
     path('liquidaciones/<int:pk>/entregas/<int:entrega_pk>/borrar/', views.entrega_borrar, name='entrega_borrar'),
-    path('salidas/', views.salidas, name='salidas'),
     path('salidas/nueva/', views.salida_nueva, name='salida_nueva'),
     path('salidas/<int:pk>/', views.salida, name='salida'),
     path('salidas/<int:pk>/insumos/', views.salida_insumo, name='salida_insumo'),

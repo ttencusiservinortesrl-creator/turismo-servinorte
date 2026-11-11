@@ -1,7 +1,7 @@
 {% with u=request.resolver_match.url_name %}
 <ul class="nav nav-pills mb-3 gap-1">
-    <li class="nav-item"><a class="nav-link {% if u == 'tablero' %}active{% endif %}" href="{% url 'marcoantonio:tablero' %}"><i class="bi bi-speedometer2"></i> Tablero</a></li>
     <li class="nav-item"><a class="nav-link {% if u == 'salidas' or u == 'salida' or u == 'salida_nueva' %}active{% endif %}" href="{% url 'marcoantonio:salidas' %}"><i class="bi bi-bus-front"></i> Salidas</a></li>
+    <li class="nav-item"><a class="nav-link {% if u == 'tablero' %}active{% endif %}" href="{% url 'marcoantonio:tablero' %}"><i class="bi bi-speedometer2"></i> Resumen y controles</a></li>
     <li class="nav-item"><a class="nav-link {% if u == 'pagos' or u == 'pago_nuevo' or u == 'pago_editar' %}active{% endif %}" href="{% url 'marcoantonio:pagos' %}"><i class="bi bi-cash-coin"></i> Pagos recibidos</a></li>
     <li class="nav-item"><a class="nav-link {% if 'comprobante' in u %}active{% endif %}" href="{% url 'marcoantonio:comprobantes' %}"><i class="bi bi-receipt"></i> Comprobantes</a></li>
     <li class="nav-item"><a class="nav-link {% if 'articulo' in u %}active{% endif %}" href="{% url 'marcoantonio:articulos' %}"><i class="bi bi-basket"></i> Artículos de insumos</a></li>

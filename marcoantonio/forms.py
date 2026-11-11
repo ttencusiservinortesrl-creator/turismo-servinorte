@@ -83,6 +83,11 @@ class ServicioForm(Estilado, TarifasOpcionales, forms.ModelForm):
 
 
 class EntregaForm(Estilado, forms.ModelForm):
+    # Para un insumo que no está en el catálogo: se da de alta en el momento
+    otro_nombre = forms.CharField(label='Otro insumo (no está en la lista)', max_length=120, required=False)
+    otro_precio = forms.DecimalField(label='Precio unitario', max_digits=14, decimal_places=2, required=False, min_value=0)
+    otro_categoria = forms.ChoiceField(label='Sección', choices=Articulo.CATEGORIAS, required=False, initial='otro')
+
     class Meta:
         model = EntregaInsumo
         fields = ['fecha', 'articulo', 'cantidad', 'observaciones']
@@ -92,10 +97,33 @@ class EntregaForm(Estilado, forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['articulo'].queryset = Articulo.objects.filter(activo=True)
+        self.fields['articulo'].required = False
+        self.fields['articulo'].empty_label = '— elegí de la lista —'
+
+    def clean(self):
+        datos = super().clean()
+        if not datos.get('articulo'):
+            if not datos.get('otro_nombre'):
+                raise forms.ValidationError('Elegí un artículo de la lista o escribí el nombre del otro insumo.')
+            if datos.get('otro_precio') is None:
+                self.add_error('otro_precio', 'Poné el precio del otro insumo.')
+        return datos
 
     def save(self, commit=True):
+        articulo = self.cleaned_data.get('articulo')
+        if not articulo:
+            # Se agrega al catálogo para poder elegirlo la próxima vez
+            nombre = self.cleaned_data['otro_nombre'].strip()
+            articulo = Articulo.objects.filter(nombre__iexact=nombre).first()
+            if not articulo:
+                ultimo = Articulo.objects.order_by('-codigo').values_list('codigo', flat=True).first() or 0
+                articulo = Articulo.objects.create(codigo=ultimo + 1, nombre=nombre,
+                                                   categoria=self.cleaned_data.get('otro_categoria') or 'otro',
+                                                   precio=self.cleaned_data['otro_precio'])
+            self.instance.articulo = articulo
+            self.instance.precio_unitario = self.cleaned_data['otro_precio']
         if not self.instance.precio_unitario:
-            self.instance.precio_unitario = self.cleaned_data['articulo'].precio
+            self.instance.precio_unitario = articulo.precio
         return super().save(commit)
 
 
@@ -126,29 +154,15 @@ class PagoForm(Estilado, forms.ModelForm):
 
 
 class ImputacionForm(Estilado, forms.ModelForm):
+    """Los pagos y comprobantes son mensuales: se aplican al mes (y se reparten entre sus salidas)."""
     class Meta:
-        fields = ['servicio', 'liquidacion', 'parte', 'importe', 'observaciones']
+        fields = ['liquidacion', 'parte', 'importe', 'observaciones']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['liquidacion'].label_from_instance = lambda l: f'{l.codigo} · {l.nombre}'
-        self.fields['liquidacion'].required = False
-        self.fields['liquidacion'].help_text = 'Si elegís una salida, se completa solo.'
-        self.fields['servicio'].queryset = ServicioMAT.objects.select_related('liquidacion').order_by('-fecha')
-        self.fields['servicio'].label_from_instance = lambda s: f'{s.fecha:%d/%m/%Y} · {s.servicio} · {s.unidad}'
-        self.fields['servicio'].empty_label = '— a cuenta del mes —'
-
-    def clean(self):
-        datos = super().clean()
-        salida, liquidacion = datos.get('servicio'), datos.get('liquidacion')
-        if salida and liquidacion and salida.liquidacion_id != liquidacion.pk:
-            self.add_error('liquidacion', 'La salida es de otro mes.')
-        elif salida:
-            datos['liquidacion'] = salida.liquidacion
-            self.instance.liquidacion = salida.liquidacion
-        elif not liquidacion and datos.get('importe'):
-            self.add_error('liquidacion', 'Elegí la salida o el mes.')
-        return datos
+        self.fields['liquidacion'].label = 'Mes'
+        self.fields['liquidacion'].label_from_instance = lambda l: f'{l.nombre} ({l.servicios.count()} salidas)'
+        self.fields['liquidacion'].queryset = Liquidacion.objects.order_by('-periodo')
 
 
 class ImputacionPagoForm(ImputacionForm):

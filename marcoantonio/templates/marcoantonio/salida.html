@@ -4,94 +4,101 @@
 {% block content %}
 <div class="encabezado">
     <h1><span class="icono"><i class="bi bi-bus-front"></i></span> {{ sal.servicio }} · {{ sal.fecha|date:"d/m/Y" }}
-        <span class="fs-6 align-middle">{% include 'marcoantonio/_estado_pago.html' with e=pagos.estado %}</span></h1>
+        <span class="fs-6 align-middle">{% if pagos.estado == 'parcial' %}<span class="badge pago-parcial">Debe $ {{ pagos.saldo|pesos }}</span>{% elif pagos.estado == 'pendiente' %}<span class="badge pago-pendiente">Debe $ {{ pagos.saldo|pesos }}</span>{% else %}{% include 'marcoantonio/_estado_pago.html' with e=pagos.estado %}{% endif %}</span></h1>
     <a class="btn btn-outline-secondary" href="{% url 'marcoantonio:servicio_editar' liq.pk sal.pk %}"><i class="bi bi-pencil"></i> Editar salida</a>
-    <a class="btn btn-outline-primary" href="{% url 'marcoantonio:pago_nuevo' %}?salida={{ sal.pk }}"><i class="bi bi-cash-coin"></i> Cargar pago de esta salida</a>
     <a class="btn btn-outline-secondary" href="{% url 'marcoantonio:salidas' %}">Volver</a>
 </div>
 {% include 'marcoantonio/_menu.html' %}
-
-<div class="row g-3 mb-3">
-    <div class="col-lg-4">
-        <div class="card h-100">
-            <div class="card-header">La salida</div>
-            <table class="table table-sm mb-0">
-                <tr><td>Unidad</td><td>{{ sal.unidad }}</td></tr>
-                {% if sal.cotizacion %}<tr><td>Cotización</td><td><a href="{% url 'cotizador:detalle' sal.cotizacion.pk %}">COT {{ sal.cotizacion.numero }}</a></td></tr>{% endif %}
-                <tr><td>Mes</td><td><a href="{% url 'marcoantonio:liquidacion' liq.pk %}">{{ liq.nombre }}</a>{% if not liq.cerrada %} <span class="badge estado-pendiente">abierta</span>{% endif %}</td></tr>
-                <tr><td>Precio <span class="small text-muted">({{ sal.get_tarifa_elegida_display|default:"sin elegir" }})</span></td><td class="num">$ {{ sal.tarifa|pesos:2 }}</td></tr>
-                <tr><td>Agua <span class="small text-muted">({{ sal.unidades_agua }} × $ {{ liq.precio_agua|pesos:2 }})</span></td><td class="num">$ {{ sal.costo_agua|pesos:2 }}</td></tr>
-                <tr><td>Insumos que llevó</td><td class="num">$ {{ sal.total_insumos|pesos:2 }}</td></tr>
-                <tr class="table-secondary fw-semibold"><td>Total neto</td><td class="num">$ {{ sal.neto|pesos:2 }}</td></tr>
-            </table>
-            {% if sal.observaciones %}<div class="card-body small">{{ sal.observaciones }}</div>{% endif %}
-        </div>
-    </div>
-    {% for clave, p in pagos.partes.items %}
-    <div class="col-lg-4">
-        <div class="card h-100">
-            <div class="card-header d-flex"><span>{{ p.nombre }}</span>{% include 'marcoantonio/_estado_pago.html' with e=p.estado %}</div>
-            <table class="table table-sm mb-0">
-                <tr class="fw-semibold"><td>Importe{% if clave == 'facturada' %} <span class="small fw-normal text-muted">({{ liq.porcentaje_facturado|pesos:0 }}% + IVA {{ liq.porcentaje_iva|pesos:1 }}%)</span>{% endif %}</td><td class="num">$ {{ p.importe|pesos:2 }}</td></tr>
-                <tr><td>Pagado aplicado a la salida</td><td class="num text-success">$ {{ p.directo|pesos:2 }}</td></tr>
-                <tr><td>Pagado a cuenta del mes <span class="small text-muted">(repartido)</span></td><td class="num text-success">$ {{ p.repartido|pesos:2 }}</td></tr>
-                <tr class="fw-semibold"><td>Saldo</td><td class="num {% if p.saldo >= 1 %}text-danger{% endif %}">$ {{ p.saldo|pesos:2 }}</td></tr>
-            </table>
-        </div>
-    </div>
-    {% endfor %}
-</div>
-
-<div class="card mb-3">
-    <div class="card-header">Insumos que llevó</div>
-    <div class="table-responsive">
-        <table class="table table-sm align-middle mb-0">
-            <thead><tr><th>Fecha</th><th>Artículo</th><th>Sección</th><th class="num">Cantidad</th><th class="num">Precio</th><th class="num">Importe</th><th></th></tr></thead>
-            <tbody>
-            {% for e in insumos %}
-                <tr><td>{{ e.fecha|date:"d/m" }}</td><td>{{ e.articulo.codigo }} · {{ e.articulo.nombre }}{% if e.observaciones %} <span class="small text-muted">{{ e.observaciones }}</span>{% endif %}</td>
-                    <td class="small">{{ e.articulo.get_categoria_display }}</td><td class="num">{{ e.cantidad|floatformat:"-2" }}</td>
-                    <td class="num">$ {{ e.precio_unitario|pesos:2 }}</td><td class="num">$ {{ e.total|pesos:2 }}</td>
-                    <td class="text-end"><form method="post" action="{% url 'marcoantonio:salida_insumo_borrar' sal.pk e.pk %}" onsubmit="return confirm('¿Quitar este insumo de la salida?');">{% csrf_token %}<button class="btn btn-sm btn-link text-danger p-0" type="submit"><i class="bi bi-trash"></i></button></form></td></tr>
-            {% empty %}<tr><td colspan="7" class="text-center text-muted py-3">Todavía no cargaste insumos para esta salida.</td></tr>{% endfor %}
-            </tbody>
-        </table>
-    </div>
-    <div class="card-body border-top bg-light">
-        <form method="post" action="{% url 'marcoantonio:salida_insumo' sal.pk %}" class="row g-2 align-items-end">
-            {% csrf_token %}
-            {% include '_campo.html' with campo=entrega_form.fecha clase='col-6 col-md-2' %}
-            {% include '_campo.html' with campo=entrega_form.articulo clase='col-12 col-md-4' %}
-            {% include '_campo.html' with campo=entrega_form.cantidad clase='col-6 col-md-2' %}
-            {% include '_campo.html' with campo=entrega_form.observaciones clase='col-12 col-md-3' %}
-            <div class="col-12 col-md-1 mb-2"><button class="btn btn-primary w-100" type="submit" title="Agregar"><i class="bi bi-plus-lg"></i></button></div>
-        </form>
-        <div class="form-text">El precio sale del catálogo de "Artículos de insumos".</div>
-    </div>
+<div class="small text-muted mb-3">
+    {{ sal.unidad }} · mes <a href="{% url 'marcoantonio:liquidacion' liq.pk %}">{{ liq.nombre }}</a>{% if not liq.cerrada %} (abierto){% endif %}
+    {% if sal.cotizacion %} · viene de la <a href="{% url 'cotizador:detalle' sal.cotizacion.pk %}">COT {{ sal.cotizacion.numero }}</a>{% endif %}
+    {% if sal.observaciones %} · {{ sal.observaciones }}{% endif %}
 </div>
 
 <div class="row g-3">
     <div class="col-lg-6">
-        <div class="card">
-            <div class="card-header">Pagos aplicados a esta salida</div>
+        <div class="card h-100">
+            <div class="card-header">1. Precio</div>
             <table class="table table-sm mb-0">
-                {% for i in imputaciones %}
-                    <tr{% if i.pago.anulado %} class="mov-anulado"{% endif %}><td>{{ i.pago.fecha|date:"d/m/Y" }}</td>
-                        <td class="small"><a href="{% url 'marcoantonio:pago_editar' i.pago.pk %}">{{ i.pago.get_medio_display }} {{ i.pago.tipo_recibo }} {{ i.pago.numero_recibo }}</a></td>
-                        <td class="small">{{ i.get_parte_display }}</td><td class="num">$ {{ i.importe|pesos:2 }}</td></tr>
-                {% empty %}<tr><td class="text-muted small">Ninguno aplicado directo a esta salida{% if pagos.pagado %} (lo pagado viene de pagos a cuenta del mes){% endif %}.</td></tr>{% endfor %}
+                <tr><td>Tarifa vendida <span class="small text-muted">({{ sal.get_tarifa_elegida_display|default:"sin elegir" }})</span></td><td class="num">$ {{ sal.tarifa|pesos:2 }}</td></tr>
+                {% if sal.tarifa_minima or sal.tarifa_intermedia or sal.tarifa_optima %}
+                <tr><td colspan="2" class="small text-muted">Mínima $ {{ sal.tarifa_minima|pesos }} · Intermedia $ {{ sal.tarifa_intermedia|pesos }} · Óptima $ {{ sal.tarifa_optima|pesos }}</td></tr>
+                {% endif %}
+                <tr><td>Agua <span class="small text-muted">({{ sal.unidades_agua }} × $ {{ liq.precio_agua|pesos:2 }})</span></td><td class="num">$ {{ sal.costo_agua|pesos:2 }}</td></tr>
+                <tr><td>Colaciones e insumos</td><td class="num">$ {{ sal.total_insumos|pesos:2 }}</td></tr>
+                <tr class="fw-semibold table-light"><td>Total neto</td><td class="num">$ {{ sal.neto|pesos:2 }}</td></tr>
             </table>
         </div>
     </div>
+
     <div class="col-lg-6">
-        <div class="card">
-            <div class="card-header">Comprobantes de esta salida</div>
+        <div class="card h-100">
+            <div class="card-header">2. Cómo se cobra</div>
             <table class="table table-sm mb-0">
-                {% for i in comprobantes %}
-                    <tr><td>{{ i.comprobante.fecha|date:"d/m/Y" }}</td><td class="small"><a href="{% url 'marcoantonio:comprobante_editar' i.comprobante.pk %}">{{ i.comprobante }}</a></td>
-                        <td class="small">{{ i.get_parte_display }}</td><td class="num">$ {{ i.importe|pesos:2 }}</td></tr>
-                {% empty %}<tr><td class="text-muted small">Ninguno vinculado a esta salida.</td></tr>{% endfor %}
+                {% for clave, p in pagos.partes.items %}
+                <tr><td>{% if clave == 'facturada' %}Con factura <span class="small text-muted">({{ liq.porcentaje_facturado|pesos:0 }}% + IVA {{ liq.porcentaje_iva|pesos:1 }}%)</span>{% else %}En efectivo sin factura <span class="small text-muted">(el resto, sin IVA)</span>{% endif %}</td>
+                    <td class="num">$ {{ p.importe|pesos:2 }}</td></tr>
+                {% endfor %}
+                <tr class="fw-semibold table-light"><td>Total a cobrar</td><td class="num">$ {{ pagos.total|pesos:2 }}</td></tr>
+                <tr><td colspan="2" class="small">
+                    <span class="text-muted">Facturas del mes:</span>
+                    {% for c, imps in comprobantes_mes %}<a href="{% url 'marcoantonio:comprobante_editar' c.pk %}">{{ c }}</a>{% if not forloop.last %}, {% endif %}
+                    {% empty %}ninguna todavía · <a href="{% url 'marcoantonio:comprobante_nuevo' %}">cargar</a>{% endfor %}
+                </td></tr>
             </table>
+        </div>
+    </div>
+
+    <div class="col-lg-6" id="insumos">
+        <div class="card h-100">
+            <div class="card-header">3. Colaciones e insumos</div>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    {% for e in insumos %}
+                        <tr><td class="num" style="width:4rem">{{ e.cantidad|floatformat:"-2" }} ×</td>
+                            <td>{{ e.articulo.nombre }} <span class="small text-muted">$ {{ e.precio_unitario|pesos:2 }}{% if e.observaciones %} · {{ e.observaciones }}{% endif %}</span></td>
+                            <td class="num">$ {{ e.total|pesos:2 }}</td>
+                            <td class="text-end" style="width:2rem"><form method="post" action="{% url 'marcoantonio:salida_insumo_borrar' sal.pk e.pk %}" onsubmit="return confirm('¿Quitar este insumo de la salida?');">{% csrf_token %}<button class="btn btn-sm btn-link text-danger p-0" type="submit" title="Quitar"><i class="bi bi-trash"></i></button></form></td></tr>
+                    {% empty %}<tr><td class="text-muted small py-3">Todavía no cargaste colaciones ni insumos.</td></tr>{% endfor %}
+                </table>
+            </div>
+            <div class="card-body border-top bg-light">
+                <form method="post" action="{% url 'marcoantonio:salida_insumo' sal.pk %}" class="row g-2 align-items-end">
+                    {% csrf_token %}
+                    {% include '_campo.html' with campo=entrega_form.articulo clase='col-12 col-md-7' %}
+                    {% include '_campo.html' with campo=entrega_form.cantidad clase='col-6 col-md-2' %}
+                    {% include '_campo.html' with campo=entrega_form.fecha clase='col-6 col-md-3' %}
+                    <div class="col-12 small text-muted">¿No está en la lista? Escribilo acá y queda agregado al catálogo:</div>
+                    {% include '_campo.html' with campo=entrega_form.otro_nombre clase='col-12 col-md-5' %}
+                    {% include '_campo.html' with campo=entrega_form.otro_precio clase='col-6 col-md-3' %}
+                    {% include '_campo.html' with campo=entrega_form.otro_categoria clase='col-6 col-md-4' %}
+                    {% include '_campo.html' with campo=entrega_form.observaciones clase='col-12 col-md-9' %}
+                    <div class="col-12 col-md-3 mb-2"><button class="btn btn-primary w-100" type="submit"><i class="bi bi-plus-lg"></i> Agregar</button></div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header">4. Pagos recibidos</div>
+            <table class="table table-sm mb-0">
+                {% for a in aplicaciones %}
+                    <tr><td>{{ a.pago.fecha|date:"d/m/Y" }}</td>
+                        <td class="small"><a href="{% url 'marcoantonio:pago_editar' a.pago.pk %}">{{ a.pago.get_medio_display }}{% if a.pago.numero_recibo %} {{ a.pago.tipo_recibo }} {{ a.pago.numero_recibo }}{% endif %}</a>
+                            <span class="text-muted">· {% if a.parte == 'facturada' %}con factura{% else %}efectivo{% endif %}</span></td>
+                        <td class="num text-success">$ {{ a.importe|pesos:2 }}</td></tr>
+                {% empty %}<tr><td class="text-muted small">Sin pagos todavía.</td></tr>{% endfor %}
+                {% for clave, p in pagos.partes.items %}{% if p.importe %}
+                <tr class="small"><td colspan="2">Falta {% if clave == 'facturada' %}con factura{% else %}en efectivo{% endif %}</td>
+                    <td class="num {% if p.saldo >= 1 %}text-danger{% endif %}">$ {{ p.saldo|pesos:2 }}</td></tr>
+                {% endif %}{% endfor %}
+                <tr class="fw-semibold table-light"><td colspan="2">Falta cobrar</td><td class="num {% if pagos.saldo >= 1 %}text-danger{% else %}text-success{% endif %}">$ {{ pagos.saldo|pesos:2 }}</td></tr>
+            </table>
+            <div class="card-body">
+                <a class="btn btn-outline-primary" href="{% url 'marcoantonio:pago_nuevo' %}?liquidacion={{ liq.pk }}"><i class="bi bi-cash-coin"></i> Cargar pago de {{ liq.nombre }}</a>
+                <div class="form-text">Los pagos son del mes: cubren las salidas de {{ liq.nombre }} de la más vieja a la más nueva.</div>
+            </div>
         </div>
     </div>
 </div>

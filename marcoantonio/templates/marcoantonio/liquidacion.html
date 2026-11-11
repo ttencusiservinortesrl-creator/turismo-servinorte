@@ -8,7 +8,8 @@
     <a class="btn btn-outline-secondary" href="{% url 'marcoantonio:liquidacion_editar' liq.pk %}"><i class="bi bi-pencil"></i> Editar</a>
     <form method="post" action="{% url 'marcoantonio:liquidacion_cerrar' liq.pk %}" onsubmit="return confirm('{% if liq.cerrada %}¿Reabrir la liquidación?{% else %}¿Cerrar la liquidación? Pasa a contar en la cuenta corriente.{% endif %}');">{% csrf_token %}
         <button class="btn {% if liq.cerrada %}btn-outline-secondary{% else %}btn-primary{% endif %}" type="submit"><i class="bi {% if liq.cerrada %}bi-unlock{% else %}bi-lock{% endif %}"></i> {% if liq.cerrada %}Reabrir{% else %}Cerrar liquidación{% endif %}</button></form>
-    <a class="btn btn-outline-secondary" href="{% url 'marcoantonio:tablero' %}">Volver</a>
+    <a class="btn btn-outline-primary" href="{% url 'marcoantonio:pago_nuevo' %}?liquidacion={{ liq.pk }}"><i class="bi bi-cash-coin"></i> Cargar pago del mes</a>
+    <a class="btn btn-outline-secondary" href="{% url 'marcoantonio:salidas' %}">Volver</a>
 </div>
 {% include 'marcoantonio/_menu.html' %}
 

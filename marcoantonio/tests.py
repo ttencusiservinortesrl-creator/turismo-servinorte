@@ -228,26 +228,40 @@ class SalidasTest(TestCase):
         art = Articulo.objects.create(codigo=3, nombre='Agua saborizada', precio=500)
         self.client.post(reverse('marcoantonio:salida_insumo', args=[sal.pk]),
                          {'fecha': '2026-10-14', 'articulo': art.pk, 'cantidad': '40', 'observaciones': ''})
-        self.assertEqual(sal.total_insumos(), Decimal('20000.00'))
+        # Un insumo que no está en el catálogo: se agrega al catálogo
+        self.client.post(reverse('marcoantonio:salida_insumo', args=[sal.pk]),
+                         {'fecha': '2026-10-14', 'articulo': '', 'cantidad': '2', 'observaciones': '',
+                          'otro_nombre': 'Bolsas de residuos', 'otro_precio': '1500', 'otro_categoria': 'limpieza'})
+        self.assertEqual(sal.total_insumos(), Decimal('23000.00'))
+        self.assertEqual(Articulo.objects.get(nombre='Bolsas de residuos').codigo, 4)
+        # Sin artículo ni nombre no se agrega
+        self.client.post(reverse('marcoantonio:salida_insumo', args=[sal.pk]),
+                         {'fecha': '2026-10-14', 'articulo': '', 'cantidad': '2', 'observaciones': ''})
+        self.assertEqual(sal.insumos.count(), 2)
         r = self.client.get(reverse('marcoantonio:salida', args=[sal.pk]))
         self.assertContains(r, 'Agua saborizada')
-        self.assertContains(r, 'Pendiente')
+        self.assertContains(r, 'Debe $')
         self.assertContains(self.client.get(reverse('marcoantonio:salidas')), 'CAFAYATE')
         self.assertContains(self.client.get(reverse('marcoantonio:liquidacion', args=[sal.liquidacion_id])), 'CAFAYATE')
-        r = self.client.get(reverse('marcoantonio:pago_nuevo') + f'?salida={sal.pk}')
+        r = self.client.get(reverse('marcoantonio:pago_nuevo') + f'?liquidacion={sal.liquidacion_id}')
         self.assertContains(r, 'CAFAYATE')
-        # Pago imputado directo a la salida (el mes se completa solo)
+        self.assertContains(r, f'<option value="{sal.liquidacion_id}" selected')
+        # Pago del mes: cubre la salida
         total = sal.total()
         datos = {'fecha': '2026-10-30', 'medio': 'efectivo', 'moneda': 'ARS', 'importe_origen': str(total),
                  'tipo_cambio': '1', 'banco_referencia': '', 'tipo_recibo': '', 'numero_recibo': '',
                  'comprobante': '', 'observaciones': '',
                  'imp-TOTAL_FORMS': '2', 'imp-INITIAL_FORMS': '0', 'imp-MIN_NUM_FORMS': '0', 'imp-MAX_NUM_FORMS': '1000',
-                 'imp-0-servicio': sal.pk, 'imp-0-liquidacion': '', 'imp-0-parte': EFECTIVO,
+                 'imp-0-liquidacion': sal.liquidacion_id, 'imp-0-parte': EFECTIVO,
                  'imp-0-importe': str(sal.importe(EFECTIVO)), 'imp-0-observaciones': '',
-                 'imp-1-servicio': sal.pk, 'imp-1-liquidacion': '', 'imp-1-parte': FACTURADA,
+                 'imp-1-liquidacion': sal.liquidacion_id, 'imp-1-parte': FACTURADA,
                  'imp-1-importe': str(sal.importe(FACTURADA)), 'imp-1-observaciones': ''}
         r = self.client.post(reverse('marcoantonio:pago_nuevo'), datos)
         self.assertEqual(r.status_code, 302)
-        self.assertEqual(ImputacionPago.objects.filter(liquidacion=sal.liquidacion).count(), 2)
+        self.assertEqual(ImputacionPago.objects.filter(liquidacion=sal.liquidacion, servicio=None).count(), 2)
         self.assertEqual(sal.estado_pagos()['estado'], 'pagada')
+        # La ficha muestra qué pago la cubrió
+        aplic = sal.liquidacion.aplicaciones_pagos()[sal.pk]
+        self.assertEqual(sum(a['importe'] for a in aplic), sal.total())
+        self.assertContains(self.client.get(reverse('marcoantonio:salida', args=[sal.pk])), 'Pagada')
         self.assertContains(self.client.get(reverse('marcoantonio:salidas') + '?estado=pagadas'), 'CAFAYATE')

@@ -148,6 +148,33 @@ class Liquidacion(models.Model):
             reparto[None][parte] = del_mes
         return reparto
 
+    def aplicaciones_pagos(self):
+        """Qué pagos cubren cada salida, con el mismo criterio que reparto_pagos:
+        {salida_id: [{'pago', 'parte', 'importe'}]}. Los pagos del mes se toman del más viejo al más nuevo."""
+        salidas = list(self.servicios.all())
+        res = {sal.pk: [] for sal in salidas}
+        for parte, _ in PARTES:
+            imputaciones = [i for i in self.imputaciones_pagos.all() if i.parte == parte and not i.pago.anulado]
+            for i in imputaciones:
+                if i.servicio_id in res:
+                    res[i.servicio_id].append({'pago': i.pago, 'parte': parte, 'importe': i.importe})
+            cola = [[i, i.importe] for i in sorted((i for i in imputaciones if i.servicio_id is None),
+                                                   key=lambda i: (i.pago.fecha, i.pago_id, i.pk))]
+            for sal in salidas:
+                directo = sum((i.importe for i in imputaciones if i.servicio_id == sal.pk), CERO)
+                falta = max(sal.importe(parte) - directo, CERO)
+                while falta > 0 and cola:
+                    tomado = min(cola[0][1], falta)
+                    if tomado > 0:
+                        res[sal.pk].append({'pago': cola[0][0].pago, 'parte': parte, 'importe': tomado})
+                    falta -= tomado
+                    cola[0][1] -= tomado
+                    if cola[0][1] <= 0:
+                        cola.pop(0)
+        for lista in res.values():
+            lista.sort(key=lambda a: (a['pago'].fecha, a['pago'].pk))
+        return res
+
     def resumen(self):
         partes = {}
         for parte, nombre in PARTES:

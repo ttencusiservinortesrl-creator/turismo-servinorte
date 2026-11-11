@@ -47,9 +47,11 @@ sin importe en LIQUIDACIONES queda abierto. Verificado contra la hoja RESUMEN (s
   viene con el precio de la cotización, sin IVA). Si cambia el precio de la cotización, la salida lo sigue solo si
   estaba vendida a ese mismo precio. Al anular o volver atrás la cotización se borra la salida si no tiene insumos
   ni pagos. Las colaciones de la cotización ya están en el precio: van solo como nota, no como insumo.
-- PENDIENTE: la usuaria pidió rehacer Marco Antonio como "ficha por salida" (lista de salidas → ficha con precio,
-  insumos, cómo se cobra y pagos). Hay que preguntarle si los pagos y facturas son por salida o por mes, y si se
-  reimporta la planilla.
+- Pantalla principal = salidas agrupadas por mes (`/marco-antonio/`); el tablero pasó a "Resumen y controles".
+  Ficha de la salida en 4 partes: precio, cómo se cobra (facturada/efectivo + facturas del mes), colaciones e
+  insumos (un insumo que no está en la lista se da de alta en el catálogo al cargarlo) y pagos recibidos
+  (`Liquidacion.aplicaciones_pagos`: qué pago cubre cada salida). Pagos y comprobantes son MENSUALES (decisión de
+  la usuaria): se imputan a mes + parte; el campo `servicio` de las imputaciones queda solo por compatibilidad.
 
 ## Decisiones
 - Cambiar parámetros no toca las cotizaciones guardadas; al editar y guardar una, se recalcula con los de hoy.

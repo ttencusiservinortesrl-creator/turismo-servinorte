@@ -5,50 +5,50 @@
 <div class="encabezado">
     <h1><span class="icono"><i class="bi bi-bus-front"></i></span> Salidas de Marco Antonio</h1>
     <a class="btn btn-primary" href="{% url 'marcoantonio:salida_nueva' %}"><i class="bi bi-plus-lg"></i> Nueva salida</a>
+    <a class="btn btn-outline-primary" href="{% url 'marcoantonio:pago_nuevo' %}"><i class="bi bi-cash-coin"></i> Cargar pago</a>
 </div>
 {% include 'marcoantonio/_menu.html' %}
-<form class="d-flex flex-wrap gap-2 align-items-end mb-3" method="get">
+<form class="d-flex flex-wrap gap-2 align-items-center mb-3" method="get">
     <div class="btn-group">
+        <a class="btn btn-outline-secondary {% if estado == 'todas' %}active{% endif %}" href="?estado=todas&mes={{ mes }}">Todas</a>
         <a class="btn btn-outline-secondary {% if estado == 'pendientes' %}active{% endif %}" href="?estado=pendientes&mes={{ mes }}">Con saldo</a>
         <a class="btn btn-outline-secondary {% if estado == 'pagadas' %}active{% endif %}" href="?estado=pagadas&mes={{ mes }}">Pagadas</a>
-        <a class="btn btn-outline-secondary {% if estado == 'todas' %}active{% endif %}" href="?estado=todas&mes={{ mes }}">Todas</a>
     </div>
     <input type="hidden" name="estado" value="{{ estado }}">
     <select class="form-select w-auto" name="mes" onchange="this.form.submit()">
         <option value="">Todos los meses</option>
         {% for m in meses %}<option value="{{ m.pk }}" {% if mes == m.pk|stringformat:"s" %}selected{% endif %}>{{ m.nombre }}</option>{% endfor %}
     </select>
-    <span class="ms-auto small text-muted">Saldo de las salidas listadas: <b class="{% if saldo_total > 0 %}text-danger{% endif %}">$ {{ saldo_total|pesos }}</b></span>
+    <span class="ms-auto">Falta cobrar de lo listado: <b class="{% if saldo_total >= 1 %}text-danger{% else %}text-success{% endif %}">$ {{ saldo_total|pesos }}</b></span>
 </form>
-<div class="card">
-    <div class="table-responsive">
-        <table class="table table-sm table-hover align-middle mb-0">
-            <thead>
-                <tr><th rowspan="2">Fecha</th><th rowspan="2">Salida</th><th rowspan="2" class="num">Precio</th><th rowspan="2" class="num">Insumos</th>
-                    <th colspan="2" class="text-center border-start">Parte facturada</th><th colspan="2" class="text-center border-start">Parte en efectivo</th>
-                    <th rowspan="2" class="num border-start">Saldo</th><th rowspan="2">Estado</th></tr>
-                <tr><th class="num border-start">Importe</th><th class="num">Pagado</th><th class="num border-start">Importe</th><th class="num">Pagado</th></tr>
-            </thead>
-            <tbody>
-            {% for f in filas %}{% with s=f.salida p=f.pagos %}
-                <tr>
-                    <td class="text-nowrap">{{ s.fecha|date:"d/m/Y" }}<div class="small text-muted">{{ s.liquidacion.nombre }}</div></td>
-                    <td><a href="{% url 'marcoantonio:salida' s.pk %}">{{ s.servicio }}</a><div class="small text-muted">{{ s.unidad }}</div></td>
-                    <td class="num">{{ s.tarifa|pesos }}</td>
-                    <td class="num">{{ s.total_insumos|pesos }}</td>
-                    <td class="num border-start">{{ p.partes.facturada.importe|pesos }}</td>
-                    <td class="num text-success">{{ p.partes.facturada.pagado|pesos }}</td>
-                    <td class="num border-start">{{ p.partes.efectivo.importe|pesos }}</td>
-                    <td class="num text-success">{{ p.partes.efectivo.pagado|pesos }}</td>
-                    <td class="num fw-semibold border-start {% if p.saldo >= 1 %}text-danger{% endif %}">{{ p.saldo|pesos }}</td>
-                    <td>{% include 'marcoantonio/_estado_pago.html' with e=p.estado %}</td>
-                </tr>
-            {% endwith %}{% empty %}
-                <tr><td colspan="10" class="text-center text-muted py-4">No hay salidas {% if estado == 'pendientes' %}con saldo{% elif estado == 'pagadas' %}pagadas{% endif %}.</td></tr>
-            {% endfor %}
-            </tbody>
-        </table>
+
+{% for g in grupos %}
+<div class="card mb-3">
+    <div class="card-header d-flex flex-wrap align-items-center gap-2">
+        <a class="fw-semibold" href="{% url 'marcoantonio:liquidacion' g.liq.pk %}">{{ g.liq.nombre }}</a>
+        {% if not g.liq.cerrada %}<span class="badge estado-pendiente">abierta</span>{% endif %}
+        <span class="small fw-normal text-muted ms-2">Mes: $ {{ g.total|pesos }} · pagado $ {{ g.pagado|pesos }} ·
+            <span class="{% if g.saldo >= 1 %}text-danger{% endif %}">falta $ {{ g.saldo|pesos }}</span></span>
+        <a class="btn btn-sm btn-outline-primary ms-auto" href="{% url 'marcoantonio:pago_nuevo' %}?liquidacion={{ g.liq.pk }}"><i class="bi bi-cash-coin"></i> Cargar pago del mes</a>
+    </div>
+    <div class="list-group list-group-flush">
+        {% for f in g.filas %}{% with s=f.salida p=f.pagos %}
+        <a class="list-group-item list-group-item-action d-flex flex-wrap align-items-center gap-2" href="{% url 'marcoantonio:salida' s.pk %}">
+            <span class="text-nowrap fw-semibold" style="min-width:4rem">{{ s.fecha|date:"d/m" }}</span>
+            <span class="me-auto">{{ s.servicio }} <span class="small text-muted">· {{ s.unidad }}</span>
+                {% if s.cotizacion_id %}<span class="badge text-bg-light border small">COT {{ s.cotizacion.numero }}</span>{% endif %}</span>
+            <span class="num text-nowrap">$ {{ p.total|pesos }}</span>
+            {% if p.estado == 'parcial' %}<span class="badge pago-parcial">Debe $ {{ p.saldo|pesos }}</span>
+            {% else %}{% include 'marcoantonio/_estado_pago.html' with e=p.estado %}{% endif %}
+        </a>
+        {% endwith %}{% endfor %}
     </div>
 </div>
-<div class="form-text mt-2">Lo pagado incluye lo aplicado a cada salida y lo que se pagó "a cuenta del mes", repartido entre las salidas de ese mes de la más vieja a la más nueva.</div>
+{% empty %}
+<div class="card"><div class="card-body text-center text-muted py-4">
+    No hay salidas {% if estado == 'pendientes' %}con saldo{% elif estado == 'pagadas' %}pagadas{% endif %}.
+    <a href="{% url 'marcoantonio:salida_nueva' %}">Cargar una salida</a>
+</div></div>
+{% endfor %}
+<div class="form-text">Los pagos son mensuales: lo que se paga de un mes cubre sus salidas de la más vieja a la más nueva. El total de cada salida incluye el IVA de la parte facturada.</div>
 {% endblock %}

@@ -3,13 +3,14 @@ from django.contrib.auth.decorators import login_required, permission_required, 
 from django.db import transaction
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from . import control, excel, importador
 from .forms import (ArticuloForm, ComprobanteForm, EntregaForm, ImportarForm, ImputacionesComprobanteFormSet,
                     ImputacionesPagoFormSet, LiquidacionForm, PagoForm, SalidaForm, ServicioForm)
-from .models import ESTADOS_PAGO, PARTES, Articulo, Comprobante, EntregaInsumo, Liquidacion, Pago, ServicioMAT
+from .models import EFECTIVO, ESTADOS_PAGO, FACTURADA, PARTES, Articulo, Comprobante, EntregaInsumo, Liquidacion, Pago, ServicioMAT
 
 
 def mat(vista):
@@ -194,7 +195,7 @@ def _filas_salidas(salidas):
 
 @mat
 def salidas(request):
-    estado = request.GET.get('estado', 'pendientes')
+    estado = request.GET.get('estado', 'todas')
     mes = request.GET.get('mes', '')
     lista = ServicioMAT.objects.select_related('liquidacion').prefetch_related(
         'insumos__articulo', 'liquidacion__servicios__insumos__articulo',
@@ -206,7 +207,17 @@ def salidas(request):
         filas = [f for f in filas if f['pagos']['estado'] in ('pendiente', 'parcial', 'sin_importe')]
     elif estado == 'pagadas':
         filas = [f for f in filas if f['pagos']['estado'] == 'pagada']
+    # Agrupadas por mes (los pagos son mensuales)
+    grupos = {}
+    for f in filas:
+        grupos.setdefault(f['salida'].liquidacion, []).append(f)
+    meses_con_salidas = []
+    for liq, fs in grupos.items():
+        total = liq.importe(FACTURADA) + liq.importe(EFECTIVO)
+        pagado = liq.pagado(FACTURADA) + liq.pagado(EFECTIVO)
+        meses_con_salidas.append({'liq': liq, 'filas': fs, 'total': total, 'pagado': pagado, 'saldo': total - pagado})
     return render(request, 'marcoantonio/salidas.html', {
+        'grupos': meses_con_salidas,
         'filas': filas, 'estado': estado, 'mes': mes, 'meses': Liquidacion.objects.order_by('-periodo'),
         'estados': ESTADOS_PAGO,
         'saldo_total': sum((f['pagos']['saldo'] for f in filas), 0)})
@@ -230,11 +241,15 @@ def salida_nueva(request):
 def salida(request, pk):
     sal = get_object_or_404(ServicioMAT.objects.select_related('liquidacion'), pk=pk)
     liq = sal.liquidacion
-    imputaciones = [i for i in liq.imputaciones_pagos.select_related('pago') if i.servicio_id == sal.pk]
+    comprobantes = {}
+    for i in liq.imputaciones_comprobantes.select_related('comprobante'):
+        if not i.comprobante.anulado:
+            comprobantes.setdefault(i.comprobante, []).append(i)
     return render(request, 'marcoantonio/salida.html', {
         'sal': sal, 'liq': liq, 'pagos': sal.estado_pagos(), 'estados': ESTADOS_PAGO,
-        'insumos': sal.insumos.select_related('articulo'), 'imputaciones': imputaciones,
-        'comprobantes': sal.imputaciones_comprobantes.select_related('comprobante'),
+        'insumos': sal.insumos.select_related('articulo'),
+        'aplicaciones': liq.aplicaciones_pagos()[sal.pk],
+        'comprobantes_mes': list(comprobantes.items()),
         'entrega_form': EntregaForm(initial={'fecha': sal.fecha}),
     })
 
@@ -249,7 +264,7 @@ def salida_insumo(request, pk):
         messages.success(request, f'Agregado: {e.cantidad:g} × {e.articulo.nombre} ($ {e.total:,.2f}).'.replace(',', 'X').replace('.', ',').replace('X', '.'))
     else:
         messages.error(request, 'No se agregó: ' + ' '.join(e for es in form.errors.values() for e in es))
-    return redirect('marcoantonio:salida', pk)
+    return redirect(reverse('marcoantonio:salida', args=[pk]) + '#insumos')
 
 
 @mat
@@ -342,10 +357,13 @@ def pago_form(request, pk=None):
     inicial = None
     if objeto.pk is None:
         objeto.creado_por = request.user
+        liq_id = request.GET.get('liquidacion')
         sal = ServicioMAT.objects.filter(pk=request.GET.get('salida') or 0).first()
         if sal:
-            # Viene desde una salida: el primer renglón ya apunta a esa salida
-            inicial = [{'servicio': sal.pk, 'liquidacion': sal.liquidacion_id, 'parte': 'efectivo'}]
+            liq_id = sal.liquidacion_id
+        if liq_id and Liquidacion.objects.filter(pk=liq_id).exists():
+            # Viene desde un mes o una salida: los dos renglones ya apuntan a ese mes
+            inicial = [{'liquidacion': int(liq_id), 'parte': FACTURADA}, {'liquidacion': int(liq_id), 'parte': EFECTIVO}]
     return _guardar_con_imputaciones(request, objeto, PagoForm, ImputacionesPagoFormSet,
                                      'marcoantonio/con_imputaciones.html', 'Pago', 'marcoantonio:pagos', inicial)
 

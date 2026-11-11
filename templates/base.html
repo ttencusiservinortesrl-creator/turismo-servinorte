@@ -27,7 +27,7 @@
             <li class="nav-item"><a class="nav-link {% if u == 'unidades' %}active{% endif %}" href="{% url 'cotizador:unidades' %}"><i class="bi bi-calendar3"></i> Unidades</a></li>
             <li class="nav-item"><a class="nav-link {% if u == 'estadisticas' %}active{% endif %}" href="{% url 'cotizador:estadisticas' %}"><i class="bi bi-bar-chart-line"></i> Estadísticas</a></li>
             <li class="nav-item"><a class="nav-link {% if u == 'clientes' or u == 'cliente' or u == 'cliente_nuevo' or u == 'cliente_editar' %}active{% endif %}" href="{% url 'cotizador:clientes' %}"><i class="bi bi-people"></i> Clientes</a></li>
-            {% if perms.marcoantonio.view_liquidacion %}<li class="nav-item"><a class="nav-link {% if request.resolver_match.app_name == 'marcoantonio' %}active{% endif %}" href="{% url 'marcoantonio:tablero' %}"><i class="bi bi-briefcase"></i> Marco Antonio</a></li>{% endif %}
+            {% if perms.marcoantonio.view_liquidacion %}<li class="nav-item"><a class="nav-link {% if request.resolver_match.app_name == 'marcoantonio' %}active{% endif %}" href="{% url 'marcoantonio:salidas' %}"><i class="bi bi-briefcase"></i> Marco Antonio</a></li>{% endif %}
             {% if perms.cotizador.change_parametros %}<li class="nav-item"><a class="nav-link {% if u == 'parametros' %}active{% endif %}" href="{% url 'cotizador:parametros' %}"><i class="bi bi-sliders"></i> Parámetros</a></li>{% endif %}
             {% if perms.cotizador.change_tipovehiculo %}<li class="nav-item"><a class="nav-link {% if u == 'vehiculos' or u == 'vehiculo_editar' %}active{% endif %}" href="{% url 'cotizador:vehiculos' %}"><i class="bi bi-bus-front"></i> Vehículos</a></li>{% endif %}
         </ul>

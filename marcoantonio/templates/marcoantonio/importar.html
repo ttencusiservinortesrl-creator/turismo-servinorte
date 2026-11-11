@@ -27,7 +27,7 @@
                 <div>Liquidaciones: <b>{{ resultado.liquidaciones }}</b> · servicios: <b>{{ resultado.servicios }}</b> · entregas de insumos: <b>{{ resultado.entregas }}</b> ({{ resultado.articulos }} artículos)</div>
                 <div>Pagos: <b>{{ resultado.pagos }}</b> ({{ resultado.imputaciones_pagos }} imputaciones) · comprobantes: <b>{{ resultado.comprobantes }}</b> ({{ resultado.imputaciones_comprobantes }} imputaciones)</div>
                 {% if resultado.avisos %}<hr><b>Para revisar:</b><ul class="mb-0">{% for a in resultado.avisos %}<li>{{ a }}</li>{% endfor %}</ul>{% endif %}
-                <hr><a class="btn btn-sm btn-primary" href="{% url 'marcoantonio:tablero' %}">Ver el tablero</a>
+                <hr><a class="btn btn-sm btn-primary" href="{% url 'marcoantonio:salidas' %}">Ver las salidas</a>
             </div>
         </div>
     </div>
