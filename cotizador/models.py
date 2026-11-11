@@ -218,6 +218,8 @@ class Cotizacion(models.Model):
         help_text='Nombres de los ítems del costo que no se suman, separados por |.')
     proyectar_inflacion = models.BooleanField('Proyectar costos por inflación a la fecha del viaje', default=True)
     inflacion_mensual = models.DecimalField('Inflación mensual (%)', max_digits=6, decimal_places=2, default=D('1.70'))
+    precio_km_manual = models.DecimalField('Otro precio por km (a mano)', max_digits=14, decimal_places=2, null=True,
+        blank=True, help_text='Para comparar con los márgenes: aparece en el resumen con su ganancia y el botón Usar.')
     tarifa_neta = models.DecimalField('Tarifa final sin IVA', max_digits=16, decimal_places=2)
     costo_total = models.DecimalField(max_digits=16, decimal_places=2, default=0)
     detalle = models.JSONField('Cálculo guardado', default=dict, blank=True)

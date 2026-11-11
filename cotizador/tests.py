@@ -102,6 +102,17 @@ class CalculoTest(TestCase):
         valor = calculo.calcular(p, datos_cot302(valor_dia_turismo=Decimal(500)))
         self.assertEqual(sueldo(valor), Decimal(500 * 166 * 5 * 2) + Decimal('33333.33'))
 
+    def test_precio_por_km_a_mano(self):
+        p = Parametros.actuales()
+        sin = calculo.calcular(p, datos_cot302())
+        self.assertFalse(any(f.get('manual') for f in sin['filas']))
+        r = calculo.calcular(p, datos_cot302(precio_km_manual=Decimal(4200)))
+        manual = [f for f in r['filas'] if f.get('manual')][0]
+        self.assertEqual(manual['nombre'], 'A mano ($4.200/km)')
+        self.assertEqual(manual['total'], Decimal('7140000.00'))      # 1.700 km × 4.200
+        self.assertEqual(manual['sugerido'], Decimal('7140000'))      # se usa tal cual, sin redondear a $10.000
+        self.assertEqual(manual['ganancia'], manual['total'] - r['costo_operativo'] - manual['impuestos'])
+
     def test_colaciones(self):
         p = Parametros.actuales()
         sin = calculo.calcular(p, datos_cot302())
@@ -238,6 +249,13 @@ class VistasTest(BaseVistas):
         r = self.client.post(reverse('cotizador:calcular'), self.post_datos(items_excluidos='Lavadero'))
         self.assertContains(r, 'data-item="Lavadero"')
         self.assertNotContains(r, 'data-item="Lavadero" checked')
+
+    def test_precio_a_mano_en_pantalla(self):
+        r = self.client.post(reverse('cotizador:calcular'), self.post_datos(precio_km_manual='3500'))
+        self.assertContains(r, 'A mano ($3.500/km)')
+        self.assertContains(r, 'data-valor="2100000"')   # 600 km × 3.500
+        self.client.post(reverse('cotizador:nueva'), self.post_datos(precio_km_manual='3500'))
+        self.assertEqual(Cotizacion.objects.get().precio_km_manual, Decimal('3500'))
 
     def test_vista_previa(self):
         r = self.client.post(reverse('cotizador:calcular'), self.post_datos())

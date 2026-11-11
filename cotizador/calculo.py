@@ -185,6 +185,12 @@ def calcular(p, datos):
         filas.append(f)
     filas.append(fila(f'Ref. ${_txt(p.precio_referencia_km)}/km', p.precio_referencia_km * km_totales,
                       p.precio_referencia_km))
+    precio_manual = _dec(datos.get('precio_km_manual'))
+    if precio_manual > 0:
+        f = fila(f'A mano (${_txt(precio_manual)}/km)', precio_manual * km_totales, precio_manual)
+        f['sugerido'] = redondear(f['total'], '1')
+        f['manual'] = True
+        filas.append(f)
 
     tarifa = _dec(datos.get('tarifa_neta'))
     final = fila('Tarifa final', tarifa) if tarifa else None

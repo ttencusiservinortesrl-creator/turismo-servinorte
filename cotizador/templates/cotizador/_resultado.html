@@ -20,7 +20,7 @@
             </thead>
             <tbody>
             {% for f in r.filas %}
-                <tr{% if forloop.first %} class="table-secondary"{% endif %}>
+                <tr class="{% if forloop.first %}table-secondary{% elif f.manual %}fila-manual{% endif %}">
                     <td class="small nombre-fila">{% if usar and f.sugerido %}<button type="button" class="btn btn-sm btn-primary usar-tarifa py-0 px-2 me-1" data-valor="{{ f.sugerido }}" title="Usar $ {{ f.sugerido|pesos }} como tarifa final">Usar</button>{% endif %}{{ f.nombre }}</td>
                     <td class="num d-none d-xxl-table-cell">{{ f.valor_km|pesos }}</td>
                     <td class="num">{{ f.total|pesos }}</td>

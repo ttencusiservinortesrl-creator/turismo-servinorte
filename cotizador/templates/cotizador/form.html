@@ -102,8 +102,10 @@
                             </div>
                         </div>
                     </div>
+                    {% include '_campo.html' with campo=form.precio_km_manual clase='col-md-6' %}
+                    <div class="col-md-6 small text-muted d-flex align-items-end mb-2">Escribí un precio por km y aparece en el resumen como "A mano", con su ganancia; tocá <b>Usar</b> para tomarlo.</div>
                     {% include '_campo.html' with campo=form.tarifa_neta clase='col-md-6' %}
-                    <div class="col-md-6 small text-muted d-flex align-items-end mb-2">Tocá <b>Usar</b> en un margen del resumen (se redondea a $10.000) o escribí el precio.</div>
+                    <div class="col-md-6 small text-muted d-flex align-items-end mb-2">Tocá <b>Usar</b> en un margen del resumen (se redondea a $10.000) o escribí acá el precio total que quieras.</div>
                     {% include '_campo.html' with campo=form.incluye clase='col-md-6' %}
                     {% include '_campo.html' with campo=form.no_incluye clase='col-md-6' %}
                     {% include '_campo.html' with campo=form.notas_internas clase='col-12' %}

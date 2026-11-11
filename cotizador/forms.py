@@ -25,7 +25,7 @@ class CotizacionForm(forms.ModelForm):
             'salida', 'regreso', 'texto_salida', 'dias', 'noches',
             'viaticos_por_chofer', 'habitaciones', 'valor_dia_turismo', 'factor_sueldo_conductor',
             'incluye_hotel', 'incluye_estacionamiento', 'incluye_lavadero', 'peaje', 'otros_gastos', 'colaciones_cantidad', 'colaciones_precio',
-            'items_excluidos', 'proyectar_inflacion', 'inflacion_mensual', 'tarifa_neta', 'incluye', 'no_incluye', 'notas_internas',
+            'items_excluidos', 'proyectar_inflacion', 'inflacion_mensual', 'precio_km_manual', 'tarifa_neta', 'incluye', 'no_incluye', 'notas_internas',
         ]
         widgets = {
             'fecha': forms.DateInput(attrs={'type': 'date'}, format='%Y-%m-%d'),

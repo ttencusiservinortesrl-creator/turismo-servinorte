@@ -224,3 +224,5 @@ a:hover { text-decoration: underline; }
 .estado-anulada { background: #fde7e7; color: #8f1d1d; text-decoration: line-through; }
 .mov-anulado td { color: var(--texto-suave); }
 .mov-anulado td.num { text-decoration: line-through; }
+
+.fila-manual > td { background: #fff8e6 !important; font-weight: 600; }
