@@ -3,11 +3,11 @@
 {% block title %}Marco Antonio Tours{% endblock %}
 {% block content %}
 <div class="encabezado">
-    <h1><span class="icono"><i class="bi bi-briefcase"></i></span> Marco Antonio Tours</h1>
-    <a class="btn btn-primary" href="{% url 'marcoantonio:salida_nueva' %}"><i class="bi bi-plus-lg"></i> Nueva salida</a>
-    <a class="btn btn-outline-primary" href="{% url 'marcoantonio:liquidacion_nueva' %}"><i class="bi bi-journal-plus"></i> Nueva liquidación</a>
-    <a class="btn btn-outline-primary" href="{% url 'marcoantonio:pago_nuevo' %}"><i class="bi bi-cash-coin"></i> Cargar pago</a>
-    <a class="btn btn-outline-primary" href="{% url 'marcoantonio:comprobante_nuevo' %}"><i class="bi bi-receipt"></i> Cargar comprobante</a>
+    <h1><span class="icono"><i class="bi bi-briefcase"></i></span> {{ rubro_nombre }} · liquidaciones y controles</h1>
+    <a class="btn btn-primary" href="{% url 'marcoantonio:salida_nueva' rubro %}"><i class="bi bi-plus-lg"></i> Nueva salida</a>
+    <a class="btn btn-outline-primary" href="{% url 'marcoantonio:liquidacion_nueva' rubro %}"><i class="bi bi-journal-plus"></i> Nueva liquidación</a>
+    <a class="btn btn-outline-primary" href="{% url 'marcoantonio:pago_nuevo' rubro %}"><i class="bi bi-cash-coin"></i> Cargar pago</a>
+    <a class="btn btn-outline-primary" href="{% url 'marcoantonio:comprobante_nuevo' rubro %}"><i class="bi bi-receipt"></i> Cargar comprobante</a>
 </div>
 {% include 'marcoantonio/_menu.html' %}
 

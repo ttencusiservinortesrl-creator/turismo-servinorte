@@ -10,7 +10,9 @@ from django.views.decorators.http import require_POST
 from . import control, excel, importador
 from .forms import (ArticuloForm, ComprobanteForm, EntregaForm, ImportarForm, ImputacionesComprobanteFormSet,
                     ImputacionesPagoFormSet, LiquidacionForm, PagoForm, SalidaForm, ServicioForm)
-from .models import EFECTIVO, ESTADOS_PAGO, FACTURADA, PARTES, forzar_efectivo, Articulo, Comprobante, EntregaInsumo, Liquidacion, Pago, ServicioMAT
+from .models import (EFECTIVO, EMISIVO, ESTADOS_PAGO, FACTURADA, FACTURADO_POR_RUBRO, NOMBRE_RUBRO, PARTES, RUBROS,
+                     forzar_efectivo)
+from .models import Articulo, Comprobante, EntregaInsumo, Liquidacion, Pago, ServicioMAT
 
 
 def mat(vista):
@@ -18,23 +20,64 @@ def mat(vista):
     return login_required(permission_required('marcoantonio.view_liquidacion', raise_exception=True)(vista))
 
 
+def _ctx(rubro, **datos):
+    """Lo que todas las pantallas de un rubro necesitan para las pestañas."""
+    return {'rubro': rubro, 'rubro_nombre': NOMBRE_RUBRO.get(rubro, ''), **datos}
+
+
 @mat
-def tablero(request):
-    return render(request, 'marcoantonio/tablero.html', {
-        'cc': control.cuenta_corriente(), 'filas': control.filas_liquidaciones(), 'controles': control.controles(),
-        'partes': PARTES})
+def panel(request):
+    """Datos generales: un resumen de cada rubro y el total de Marco Antonio."""
+    rubros = []
+    for clave, nombre in RUBROS:
+        cc = control.cuenta_corriente(clave)
+        filas = _filas_salidas(ServicioMAT.objects.filter(liquidacion__rubro=clave).select_related('liquidacion')
+                               .prefetch_related('insumos__articulo', 'liquidacion__servicios__insumos__articulo',
+                                                 'liquidacion__imputaciones_pagos__pago'))
+        con_saldo = [f for f in filas if f['pagos']['saldo'] >= 1]
+        rubros.append({'clave': clave, 'nombre': nombre, 'cc': cc, 'controles': control.controles(clave)['total'],
+                       'salidas': len(filas), 'con_saldo': len(con_saldo),
+                       'saldo_salidas': sum((f['pagos']['saldo'] for f in con_saldo), 0),
+                       'facturado': FACTURADO_POR_RUBRO[clave]})
+    total = {
+        'liquidado': sum((r['cc']['total_liquidado'] for r in rubros), 0),
+        'recibido': sum((r['cc']['recibido'] for r in rubros), 0),
+        'saldo': sum((r['cc']['saldo'] for r in rubros), 0),
+        'en_curso': sum((r['cc']['en_curso'] for r in rubros), 0),
+        'facturada': sum((r['cc']['liquidado'][FACTURADA] for r in rubros), 0),
+        'efectivo': sum((r['cc']['liquidado'][EFECTIVO] for r in rubros), 0),
+    }
+    return render(request, 'marcoantonio/panel.html', _ctx(None, rubros=rubros, total=total))
+
+
+@mat
+def tablero(request, rubro):
+    return render(request, 'marcoantonio/tablero.html', _ctx(
+        rubro, cc=control.cuenta_corriente(rubro), filas=control.filas_liquidaciones(rubro),
+        controles=control.controles(rubro), partes=PARTES))
 
 
 # ---------- Liquidaciones ----------
 
+def _nueva_liquidacion(rubro, periodo=None):
+    """Liquidación nueva del rubro con el %, el IVA y el agua de la última de ese rubro (o los del rubro)."""
+    anterior = Liquidacion.objects.filter(rubro=rubro).order_by('-periodo').first()
+    liq = Liquidacion(rubro=rubro, periodo=periodo, porcentaje_facturado=FACTURADO_POR_RUBRO[rubro])
+    if anterior:
+        liq.porcentaje_facturado, liq.porcentaje_iva = anterior.porcentaje_facturado, anterior.porcentaje_iva
+        liq.precio_agua = anterior.precio_agua
+    return liq
+
+
 @mat
-def liquidacion_nueva(request):
-    form = LiquidacionForm(request.POST or None, initial={'mes': timezone.localdate().replace(day=1)})
+def liquidacion_nueva(request, rubro):
+    form = LiquidacionForm(request.POST or None, instance=_nueva_liquidacion(rubro),
+                           initial={'mes': timezone.localdate().replace(day=1)})
     if request.method == 'POST' and form.is_valid():
         liq = form.save()
-        messages.success(request, f'Liquidación {liq.nombre} creada.')
+        messages.success(request, f'Liquidación {liq.nombre_completo} creada.')
         return redirect('marcoantonio:liquidacion', liq.pk)
-    return render(request, 'marcoantonio/form.html', {'form': form, 'titulo': 'Nueva liquidación'})
+    return render(request, 'marcoantonio/form.html', _ctx(rubro, form=form, titulo=f'Nueva liquidación · {NOMBRE_RUBRO[rubro]}'))
 
 
 @mat
@@ -45,8 +88,8 @@ def liquidacion_editar(request, pk):
         form.save()
         messages.success(request, 'Liquidación actualizada.')
         return redirect('marcoantonio:liquidacion', pk)
-    return render(request, 'marcoantonio/form.html', {'form': form, 'titulo': f'Editar liquidación {liq.nombre}',
-                                                      'volver': liq})
+    return render(request, 'marcoantonio/form.html', _ctx(liq.rubro, form=form, volver=liq,
+                                                          titulo=f'Editar liquidación {liq.nombre_completo}'))
 
 
 def _planilla_insumos(liq):
@@ -76,6 +119,7 @@ def liquidacion(request, pk):
     dias, secciones = _planilla_insumos(liq)
     suma_detalle = liq.total_servicios() + liq.total_agua() + liq.total_insumos()
     return render(request, 'marcoantonio/liquidacion.html', {
+        'rubro': liq.rubro, 'rubro_nombre': liq.get_rubro_display(),
         'liq': liq, 'partes': liq.resumen(), 'dias': dias, 'secciones': secciones, 'suma_detalle': suma_detalle,
         'insumos_colacion': liq.total_insumos('colacion'), 'insumos_limpieza': liq.total_insumos('limpieza'),
         'insumos_otros': liq.total_insumos('otro'),
@@ -128,7 +172,8 @@ def servicio_editar(request, pk, servicio_pk):
         form.save()
         messages.success(request, 'Servicio actualizado.')
         return redirect('marcoantonio:liquidacion', pk)
-    return render(request, 'marcoantonio/form.html', {'form': form, 'titulo': f'Servicio del {servicio.fecha:%d/%m}', 'volver': liq})
+    return render(request, 'marcoantonio/form.html', _ctx(liq.rubro, form=form, volver=liq,
+                                                          titulo=f'Salida del {servicio.fecha:%d/%m}'))
 
 
 @mat
@@ -155,8 +200,8 @@ def entrega_guardar(request, pk):
 @mat
 def entregas(request, pk):
     liq = get_object_or_404(Liquidacion, pk=pk)
-    return render(request, 'marcoantonio/entregas.html', {'liq': liq, 'entregas': liq.entregas.select_related('articulo', 'servicio'),
-                                                          'salidas': liq.servicios.all()})
+    return render(request, 'marcoantonio/entregas.html', _ctx(liq.rubro, liq=liq, salidas=liq.servicios.all(),
+                                                              entregas=liq.entregas.select_related('articulo', 'servicio')))
 
 
 @mat
@@ -169,18 +214,15 @@ def entrega_borrar(request, pk, entrega_pk):
 
 # ---------- Salidas ----------
 
-def _liquidacion_del_mes(fecha):
-    """La liquidación del mes de esa fecha; si no existe, se crea con el % y el IVA de la última."""
+def _liquidacion_del_mes(fecha, rubro=EMISIVO):
+    """La liquidación del rubro para el mes de esa fecha; si no existe, se crea."""
     periodo = fecha.replace(day=1)
-    liq = Liquidacion.objects.filter(periodo=periodo).first()
+    liq = Liquidacion.objects.filter(periodo=periodo, rubro=rubro).first()
     if liq:
         return liq
-    anterior = Liquidacion.objects.order_by('-periodo').first()
-    datos = {}
-    if anterior:
-        datos = {'porcentaje_facturado': anterior.porcentaje_facturado, 'porcentaje_iva': anterior.porcentaje_iva,
-                 'precio_agua': anterior.precio_agua}
-    return Liquidacion.objects.create(periodo=periodo, **datos)
+    liq = _nueva_liquidacion(rubro, periodo)
+    liq.save()
+    return liq
 
 
 def _filas_salidas(salidas):
@@ -194,10 +236,10 @@ def _filas_salidas(salidas):
 
 
 @mat
-def salidas(request):
+def salidas(request, rubro):
     estado = request.GET.get('estado', 'todas')
     mes = request.GET.get('mes', '')
-    lista = ServicioMAT.objects.select_related('liquidacion').prefetch_related(
+    lista = ServicioMAT.objects.filter(liquidacion__rubro=rubro).select_related('liquidacion').prefetch_related(
         'insumos__articulo', 'liquidacion__servicios__insumos__articulo',
         'liquidacion__imputaciones_pagos__pago').order_by('-fecha', '-id')
     if mes:
@@ -217,24 +259,24 @@ def salidas(request):
         pagado = liq.pagado(FACTURADA) + liq.pagado(EFECTIVO)
         meses_con_salidas.append({'liq': liq, 'filas': fs, 'total': total, 'pagado': pagado, 'saldo': total - pagado})
     return render(request, 'marcoantonio/salidas.html', {
-        'grupos': meses_con_salidas,
-        'filas': filas, 'estado': estado, 'mes': mes, 'meses': Liquidacion.objects.order_by('-periodo'),
+        'rubro': rubro, 'rubro_nombre': NOMBRE_RUBRO[rubro], 'grupos': meses_con_salidas,
+        'filas': filas, 'estado': estado, 'mes': mes, 'meses': Liquidacion.objects.filter(rubro=rubro).order_by('-periodo'),
         'estados': ESTADOS_PAGO,
         'saldo_total': sum((f['pagos']['saldo'] for f in filas), 0)})
 
 
 @mat
-def salida_nueva(request):
+def salida_nueva(request, rubro):
     form = SalidaForm(request.POST or None, initial={'fecha': timezone.localdate()})
     if request.method == 'POST' and form.is_valid():
         salida = form.save(commit=False)
-        salida.liquidacion = _liquidacion_del_mes(salida.fecha)
+        salida.liquidacion = _liquidacion_del_mes(salida.fecha, rubro)
         salida.save()
         if salida.liquidacion.cerrada:
             messages.warning(request, f'Ojo: la liquidación de {salida.liquidacion.nombre} ya estaba cerrada.')
         messages.success(request, 'Salida cargada. Ahora podés agregar los insumos que llevó.')
         return redirect('marcoantonio:salida', salida.pk)
-    return render(request, 'marcoantonio/form.html', {'form': form, 'titulo': 'Nueva salida'})
+    return render(request, 'marcoantonio/form.html', _ctx(rubro, form=form, titulo=f'Nueva salida · {NOMBRE_RUBRO[rubro]}'))
 
 
 @mat
@@ -246,7 +288,7 @@ def salida(request, pk):
         if not i.comprobante.anulado:
             comprobantes.setdefault(i.comprobante, []).append(i)
     return render(request, 'marcoantonio/salida.html', {
-        'sal': sal, 'liq': liq, 'pagos': sal.estado_pagos(), 'estados': ESTADOS_PAGO,
+        'rubro': liq.rubro, 'rubro_nombre': liq.get_rubro_display(), 'sal': sal, 'liq': liq, 'pagos': sal.estado_pagos(), 'estados': ESTADOS_PAGO,
         'insumos': sal.insumos.select_related('articulo'),
         'aplicaciones': liq.aplicaciones_pagos()[sal.pk],
         'comprobantes_mes': list(comprobantes.items()),
@@ -303,8 +345,10 @@ def articulos(request, pk=None):
 # ---------- Comprobantes y pagos ----------
 
 def _guardar_con_imputaciones(request, objeto, form_clase, formset_clase, plantilla, titulo, destino, inicial=None):
+    rubro = objeto.rubro
     form = form_clase(request.POST or None, instance=objeto)
-    formset = formset_clase(request.POST or None, instance=objeto, prefix='imp', initial=inicial)
+    formset = formset_clase(request.POST or None, instance=objeto, prefix='imp', initial=inicial,
+                            form_kwargs={'rubro': rubro})
     if request.method == 'POST' and form.is_valid() and formset.is_valid():
         with transaction.atomic():
             guardado = form.save()
@@ -314,19 +358,19 @@ def _guardar_con_imputaciones(request, objeto, form_clase, formset_clase, planti
         messages.success(request, f'{titulo} guardado.')
         if cambiadas:
             messages.info(request, 'Es "M" (en negro, sin IVA): lo apliqué a la parte en efectivo sin factura.')
-        return redirect(destino)
+        return redirect(destino, rubro)
     salidas_pendientes = [f for f in _filas_salidas(
-        ServicioMAT.objects.select_related('liquidacion').prefetch_related(
+        ServicioMAT.objects.filter(liquidacion__rubro=rubro).select_related('liquidacion').prefetch_related(
             'insumos__articulo', 'liquidacion__servicios__insumos__articulo', 'liquidacion__imputaciones_pagos__pago'
         ).order_by('fecha')) if f['pagos']['saldo'] >= 1]
-    return render(request, plantilla, {'form': form, 'formset': formset, 'titulo': titulo, 'objeto': objeto,
-                                       'pendientes': _pendientes(), 'salidas_pendientes': salidas_pendientes})
+    return render(request, plantilla, _ctx(rubro, form=form, formset=formset, titulo=titulo, objeto=objeto,
+                                           pendientes=_pendientes(rubro), salidas_pendientes=salidas_pendientes))
 
 
-def _pendientes():
-    """Saldos por cobrar y por comprobar de cada liquidación, para ayudar a imputar."""
+def _pendientes(rubro):
+    """Saldos por cobrar y por comprobar de cada liquidación del rubro, para ayudar a imputar."""
     filas = []
-    for liq in Liquidacion.objects.prefetch_related('servicios', 'entregas__articulo'):
+    for liq in Liquidacion.objects.filter(rubro=rubro).prefetch_related('servicios', 'entregas__articulo'):
         for parte, nombre in PARTES:
             importe = liq.importe(parte)
             if importe:
@@ -336,27 +380,27 @@ def _pendientes():
 
 
 @mat
-def comprobantes(request):
-    lista = Comprobante.objects.prefetch_related('imputaciones__liquidacion', 'pagos')
-    return render(request, 'marcoantonio/comprobantes.html', {'comprobantes': lista})
+def comprobantes(request, rubro):
+    lista = Comprobante.objects.filter(rubro=rubro).prefetch_related('imputaciones__liquidacion', 'pagos')
+    return render(request, 'marcoantonio/comprobantes.html', _ctx(rubro, comprobantes=lista))
 
 
 @mat
-def comprobante_form(request, pk=None):
-    objeto = get_object_or_404(Comprobante, pk=pk) if pk else Comprobante(fecha=timezone.localdate())
+def comprobante_form(request, rubro=None, pk=None):
+    objeto = get_object_or_404(Comprobante, pk=pk) if pk else Comprobante(fecha=timezone.localdate(), rubro=rubro)
     return _guardar_con_imputaciones(request, objeto, ComprobanteForm, ImputacionesComprobanteFormSet,
                                      'marcoantonio/con_imputaciones.html', 'Comprobante', 'marcoantonio:comprobantes')
 
 
 @mat
-def pagos(request):
-    lista = Pago.objects.select_related('comprobante').prefetch_related('imputaciones__liquidacion')
-    return render(request, 'marcoantonio/pagos.html', {'pagos': lista})
+def pagos(request, rubro):
+    lista = Pago.objects.filter(rubro=rubro).select_related('comprobante').prefetch_related('imputaciones__liquidacion')
+    return render(request, 'marcoantonio/pagos.html', _ctx(rubro, pagos=lista))
 
 
 @mat
-def pago_form(request, pk=None):
-    objeto = get_object_or_404(Pago, pk=pk) if pk else Pago(fecha=timezone.localdate())
+def pago_form(request, rubro=None, pk=None):
+    objeto = get_object_or_404(Pago, pk=pk) if pk else Pago(fecha=timezone.localdate(), rubro=rubro)
     inicial = None
     if objeto.pk is None:
         objeto.creado_por = request.user
@@ -364,7 +408,7 @@ def pago_form(request, pk=None):
         sal = ServicioMAT.objects.filter(pk=request.GET.get('salida') or 0).first()
         if sal:
             liq_id = sal.liquidacion_id
-        if liq_id and Liquidacion.objects.filter(pk=liq_id).exists():
+        if liq_id and Liquidacion.objects.filter(pk=liq_id, rubro=objeto.rubro).exists():
             # Viene desde un mes o una salida: los dos renglones ya apuntan a ese mes
             inicial = [{'liquidacion': int(liq_id), 'parte': FACTURADA}, {'liquidacion': int(liq_id), 'parte': EFECTIVO}]
     return _guardar_con_imputaciones(request, objeto, PagoForm, ImputacionesPagoFormSet,
@@ -379,7 +423,7 @@ def anular(request, tipo, pk):
     objeto.anulado = not objeto.anulado
     objeto.save(update_fields=['anulado'])
     messages.success(request, f'{objeto} {"anulado: ya no cuenta en los saldos" if objeto.anulado else "vuelve a contar"}.')
-    return redirect('marcoantonio:pagos' if tipo == 'pago' else 'marcoantonio:comprobantes')
+    return redirect('marcoantonio:pagos' if tipo == 'pago' else 'marcoantonio:comprobantes', objeto.rubro)
 
 
 # ---------- Importar y Excel ----------
@@ -395,7 +439,7 @@ def importar(request):
             messages.success(request, 'Planilla importada.')
         except importador.ErrorImportacion as e:
             messages.error(request, f'No se importó: {e}')
-    return render(request, 'marcoantonio/importar.html', {'form': form, 'resultado': resultado})
+    return render(request, 'marcoantonio/importar.html', _ctx(None, form=form, resultado=resultado))
 
 
 @mat
@@ -417,9 +461,10 @@ def desde_cotizacion(request, cot_pk):
     if error:
         messages.error(request, error)
         return redirect('cotizador:detalle', cot.pk)
-    sal = crear_salida(cot, tarifas)
+    rubro = request.POST.get('rubro') if request.POST.get('rubro') in NOMBRE_RUBRO else EMISIVO
+    sal = crear_salida(cot, tarifas, rubro)
     messages.success(request, f'Listo: la cotización {cot.numero} ya es una salida de Marco Antonio '
-                              f'({sal.liquidacion.nombre}). Cargale los insumos que lleve.')
+                              f'({sal.liquidacion.nombre_completo}). Cargale los insumos que lleve.')
     if sal.liquidacion.cerrada:
         messages.warning(request, f'Ojo: la liquidación de {sal.liquidacion.nombre} ya estaba cerrada.')
     return redirect('marcoantonio:salida', sal.pk)

@@ -55,6 +55,13 @@ sin importe en LIQUIDACIONES queda abierto. Verificado contra la hoja RESUMEN (s
 - Factura M / NC M: sin IVA, en negro → siempre parte en efectivo. Lo mismo un pago con REC M o vinculado a una
   factura M (`Comprobante.en_negro`, `Pago.en_negro`, `forzar_efectivo`), al guardar y al importar.
 
+- Rubros (pestañas): Educativo (todo facturado, 100%), Especiales (todo sin factura, 0%) y Emisivo en bus (50/50).
+  `Liquidacion`, `Pago` y `Comprobante` tienen `rubro`; una liquidación por rubro y mes. Cada pago o comprobante es de
+  un solo rubro y solo se imputa a meses de ese rubro. `/marco-antonio/` = panel general (resumen por rubro y total);
+  `/marco-antonio/<rubro>/...` = salidas, liquidaciones y controles, pagos, comprobantes. Artículos son comunes.
+  La planilla importada es de Emisivo en bus: importar solo reemplaza ese rubro. Colaciones de educativo y
+  especiales: pendiente de definir con la usuaria.
+
 ## Decisiones
 - Cambiar parámetros no toca las cotizaciones guardadas; al editar y guardar una, se recalcula con los de hoy.
 - Cada ítem del costo se calcula por vehículo (choferes y rendimiento de cada línea) y se suma; "Otros gastos"

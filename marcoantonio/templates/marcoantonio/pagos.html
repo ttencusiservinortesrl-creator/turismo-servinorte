@@ -3,8 +3,8 @@
 {% block title %}Pagos de Marco Antonio{% endblock %}
 {% block content %}
 <div class="encabezado">
-    <h1><span class="icono"><i class="bi bi-cash-coin"></i></span> Pagos recibidos de Marco Antonio</h1>
-    <a class="btn btn-primary" href="{% url 'marcoantonio:pago_nuevo' %}"><i class="bi bi-plus-lg"></i> Cargar pago</a>
+    <h1><span class="icono"><i class="bi bi-cash-coin"></i></span> {{ rubro_nombre }} · pagos recibidos</h1>
+    <a class="btn btn-primary" href="{% url 'marcoantonio:pago_nuevo' rubro %}"><i class="bi bi-plus-lg"></i> Cargar pago</a>
 </div>
 {% include 'marcoantonio/_menu.html' %}
 <div class="card">

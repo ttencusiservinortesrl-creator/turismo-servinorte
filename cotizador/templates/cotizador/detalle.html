@@ -95,7 +95,7 @@ document.querySelectorAll('.anular-mov').forEach(f => f.addEventListener('submit
 <div class="card shadow-sm mb-3 {% if mat.es_cliente and not mat.salida %}border-primary{% endif %}">
     <div class="card-body d-flex flex-wrap gap-2 align-items-center">
         {% if mat.salida %}
-            <span class="me-auto"><i class="bi bi-briefcase text-primary"></i> Ya está en <b>Marco Antonio</b> como salida del {{ mat.salida.fecha|date:"d/m/Y" }} ({{ mat.salida.liquidacion.nombre }}).</span>
+            <span class="me-auto"><i class="bi bi-briefcase text-primary"></i> Ya está en <b>Marco Antonio</b> como salida del {{ mat.salida.fecha|date:"d/m/Y" }} ({{ mat.salida.liquidacion.nombre_completo }}).</span>
             <a class="btn btn-sm btn-outline-primary" href="{% url 'marcoantonio:salida' mat.salida.pk %}"><i class="bi bi-box-arrow-up-right"></i> Ver la salida</a>
         {% else %}
             <span class="me-auto"><i class="bi bi-briefcase text-primary"></i> {% if mat.es_cliente %}Es un viaje de <b>Marco Antonio Tours</b>: pasalo a su sección para liquidarlo con sus insumos.{% else %}¿Es un viaje de Marco Antonio Tours?{% endif %}
@@ -118,7 +118,11 @@ document.querySelectorAll('.anular-mov').forEach(f => f.addEventListener('submit
                         <label class="form-check-label small"><input class="form-check-input me-1" type="radio" name="tarifa_elegida" value="otra" checked> Otra (a mano)</label>
                         <input class="form-control form-control-sm" type="number" step="0.01" min="0" name="tarifa_otra" value="{{ cot.tarifa_neta|stringformat:'s' }}">
                     </div>
-                    <div class="col-12 col-md-auto">
+                    <div class="col-6 col-md-auto">
+                        <label class="form-label small mb-0">Rubro</label>
+                        <select class="form-select form-select-sm" name="rubro">{% for clave, nombre in rubros_mat %}<option value="{{ clave }}" {% if clave == 'emisivo' %}selected{% endif %}>{{ nombre }}</option>{% endfor %}</select>
+                    </div>
+                    <div class="col-6 col-md-auto">
                         <button class="btn {% if mat.es_cliente %}btn-primary{% else %}btn-outline-primary{% endif %} w-100" type="submit"><i class="bi bi-send"></i> Pasar a Marco Antonio</button>
                     </div>
                 </div>

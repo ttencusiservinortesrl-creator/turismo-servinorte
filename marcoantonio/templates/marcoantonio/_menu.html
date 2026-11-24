@@ -1,11 +1,19 @@
 {% with u=request.resolver_match.url_name %}
-<ul class="nav nav-pills mb-3 gap-1">
-    <li class="nav-item"><a class="nav-link {% if u == 'salidas' or u == 'salida' or u == 'salida_nueva' %}active{% endif %}" href="{% url 'marcoantonio:salidas' %}"><i class="bi bi-bus-front"></i> Salidas</a></li>
-    <li class="nav-item"><a class="nav-link {% if u == 'tablero' %}active{% endif %}" href="{% url 'marcoantonio:tablero' %}"><i class="bi bi-speedometer2"></i> Resumen y controles</a></li>
-    <li class="nav-item"><a class="nav-link {% if u == 'pagos' or u == 'pago_nuevo' or u == 'pago_editar' %}active{% endif %}" href="{% url 'marcoantonio:pagos' %}"><i class="bi bi-cash-coin"></i> Pagos recibidos</a></li>
-    <li class="nav-item"><a class="nav-link {% if 'comprobante' in u %}active{% endif %}" href="{% url 'marcoantonio:comprobantes' %}"><i class="bi bi-receipt"></i> Comprobantes</a></li>
-    <li class="nav-item"><a class="nav-link {% if 'articulo' in u %}active{% endif %}" href="{% url 'marcoantonio:articulos' %}"><i class="bi bi-basket"></i> Artículos de insumos</a></li>
+<ul class="nav nav-tabs mb-3 flex-wrap">
+    <li class="nav-item"><a class="nav-link {% if u == 'panel' %}active fw-semibold{% endif %}" href="{% url 'marcoantonio:panel' %}"><i class="bi bi-grid"></i> Panel general</a></li>
+    {% for clave, nombre in rubros_mat %}
+    <li class="nav-item"><a class="nav-link {% if rubro == clave %}active fw-semibold{% endif %}" href="{% url 'marcoantonio:salidas' clave %}">{{ nombre }}</a></li>
+    {% endfor %}
+    <li class="nav-item ms-lg-auto"><a class="nav-link {% if u == 'articulos' or u == 'articulo_editar' %}active{% endif %}" href="{% url 'marcoantonio:articulos' %}"><i class="bi bi-basket"></i> Artículos</a></li>
     <li class="nav-item"><a class="nav-link" href="{% url 'marcoantonio:excel' %}"><i class="bi bi-file-earmark-excel"></i> Excel</a></li>
-    {% if user.is_superuser %}<li class="nav-item"><a class="nav-link {% if u == 'importar' %}active{% endif %}" href="{% url 'marcoantonio:importar' %}"><i class="bi bi-upload"></i> Importar planilla</a></li>{% endif %}
+    {% if user.is_superuser %}<li class="nav-item"><a class="nav-link {% if u == 'importar' %}active{% endif %}" href="{% url 'marcoantonio:importar' %}"><i class="bi bi-upload"></i> Importar</a></li>{% endif %}
 </ul>
+{% if rubro %}
+<ul class="nav nav-pills mb-3 gap-1">
+    <li class="nav-item"><a class="nav-link {% if u == 'salidas' or u == 'salida' or u == 'salida_nueva' %}active{% endif %}" href="{% url 'marcoantonio:salidas' rubro %}"><i class="bi bi-bus-front"></i> Salidas</a></li>
+    <li class="nav-item"><a class="nav-link {% if u == 'tablero' or u == 'liquidacion' or u == 'liquidacion_nueva' or u == 'liquidacion_editar' or u == 'entregas' %}active{% endif %}" href="{% url 'marcoantonio:tablero' rubro %}"><i class="bi bi-journal-text"></i> Liquidaciones y controles</a></li>
+    <li class="nav-item"><a class="nav-link {% if u == 'pagos' or u == 'pago_nuevo' or u == 'pago_editar' %}active{% endif %}" href="{% url 'marcoantonio:pagos' rubro %}"><i class="bi bi-cash-coin"></i> Pagos recibidos</a></li>
+    <li class="nav-item"><a class="nav-link {% if u == 'comprobantes' or u == 'comprobante_nuevo' or u == 'comprobante_editar' %}active{% endif %}" href="{% url 'marcoantonio:comprobantes' rubro %}"><i class="bi bi-receipt"></i> Comprobantes</a></li>
+</ul>
+{% endif %}
 {% endwith %}

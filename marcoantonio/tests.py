@@ -153,13 +153,19 @@ class VistasTest(TestCase):
         archivo = SimpleUploadedFile('mat.xlsx', planilla_de_prueba())
         r = self.client.post(reverse('marcoantonio:importar'), {'archivo': archivo, 'confirmar': 'on'})
         self.assertContains(r, 'Planilla importada')
-        self.assertContains(self.client.get(reverse('marcoantonio:tablero')), 'Parte en efectivo sin factura')
+        self.assertContains(self.client.get(reverse('marcoantonio:tablero', args=['emisivo'])), 'Parte en efectivo sin factura')
         liq = Liquidacion.objects.get(periodo=date(2026, 3, 1))
         r = self.client.get(reverse('marcoantonio:liquidacion', args=[liq.pk]))
         self.assertContains(r, 'CACHI')
         self.assertContains(r, 'Galletas')
-        for nombre in ('pagos', 'comprobantes', 'articulos', 'pago_nuevo', 'comprobante_nuevo', 'liquidacion_nueva'):
+        for rubro in ('educativo', 'especiales', 'emisivo'):
+            for nombre in ('salidas', 'tablero', 'pagos', 'comprobantes', 'pago_nuevo', 'comprobante_nuevo',
+                           'liquidacion_nueva', 'salida_nueva'):
+                self.assertEqual(self.client.get(reverse(f'marcoantonio:{nombre}', args=[rubro])).status_code, 200,
+                                 (rubro, nombre))
+        for nombre in ('panel', 'articulos', 'importar'):
             self.assertEqual(self.client.get(reverse(f'marcoantonio:{nombre}')).status_code, 200, nombre)
+        self.assertEqual(liq.rubro, 'emisivo')
         r = self.client.get(reverse('marcoantonio:excel'))
         wb = openpyxl.load_workbook(io.BytesIO(r.content))
         self.assertEqual(wb.sheetnames, ['Liquidaciones', 'Pagos', 'Comprobantes', 'Imputaciones'])
@@ -171,7 +177,7 @@ class VistasTest(TestCase):
                  'comprobante': '', 'observaciones': '',
                  'imp-TOTAL_FORMS': '2', 'imp-INITIAL_FORMS': '0', 'imp-MIN_NUM_FORMS': '0', 'imp-MAX_NUM_FORMS': '1000',
                  'imp-0-liquidacion': liq.pk, 'imp-0-parte': FACTURADA, 'imp-0-importe': '110500', 'imp-0-observaciones': ''}
-        r = self.client.post(reverse('marcoantonio:pago_nuevo'), datos)
+        r = self.client.post(reverse('marcoantonio:pago_nuevo', args=['emisivo']), datos)
         self.assertEqual(r.status_code, 302)
         self.assertEqual(liq.saldo(FACTURADA), 0)
         self.client.post(reverse('marcoantonio:liquidacion_cerrar', args=[liq.pk]))
@@ -184,7 +190,7 @@ class VistasTest(TestCase):
 
     def test_sin_permiso(self):
         self.client.force_login(User.objects.create_user('otro', password='x'))
-        self.assertEqual(self.client.get(reverse('marcoantonio:tablero')).status_code, 403)
+        self.assertEqual(self.client.get(reverse('marcoantonio:tablero', args=['emisivo'])).status_code, 403)
 
 
 class SalidasTest(TestCase):
@@ -221,7 +227,7 @@ class SalidasTest(TestCase):
         datos = {'fecha': '2026-10-14', 'unidad': 'DOBLE PISO', 'servicio': 'CAFAYATE', 'tarifa_minima': '',
                  'tarifa_intermedia': '', 'tarifa_optima': '', 'tarifa_elegida': 'otra', 'tarifa_otra': '2000000',
                  'unidades_agua': '0', 'observaciones': ''}
-        r = self.client.post(reverse('marcoantonio:salida_nueva'), datos)
+        r = self.client.post(reverse('marcoantonio:salida_nueva', args=['emisivo']), datos)
         sal = ServicioMAT.objects.get()
         self.assertRedirects(r, reverse('marcoantonio:salida', args=[sal.pk]))
         self.assertEqual(sal.liquidacion.periodo, date(2026, 10, 1))
@@ -241,9 +247,9 @@ class SalidasTest(TestCase):
         r = self.client.get(reverse('marcoantonio:salida', args=[sal.pk]))
         self.assertContains(r, 'Agua saborizada')
         self.assertContains(r, 'Debe $')
-        self.assertContains(self.client.get(reverse('marcoantonio:salidas')), 'CAFAYATE')
+        self.assertContains(self.client.get(reverse('marcoantonio:salidas', args=['emisivo'])), 'CAFAYATE')
         self.assertContains(self.client.get(reverse('marcoantonio:liquidacion', args=[sal.liquidacion_id])), 'CAFAYATE')
-        r = self.client.get(reverse('marcoantonio:pago_nuevo') + f'?liquidacion={sal.liquidacion_id}')
+        r = self.client.get(reverse('marcoantonio:pago_nuevo', args=['emisivo']) + f'?liquidacion={sal.liquidacion_id}')
         self.assertContains(r, 'CAFAYATE')
         self.assertContains(r, f'<option value="{sal.liquidacion_id}" selected')
         # Pago del mes: cubre la salida
@@ -256,7 +262,7 @@ class SalidasTest(TestCase):
                  'imp-0-importe': str(sal.importe(EFECTIVO)), 'imp-0-observaciones': '',
                  'imp-1-liquidacion': sal.liquidacion_id, 'imp-1-parte': FACTURADA,
                  'imp-1-importe': str(sal.importe(FACTURADA)), 'imp-1-observaciones': ''}
-        r = self.client.post(reverse('marcoantonio:pago_nuevo'), datos)
+        r = self.client.post(reverse('marcoantonio:pago_nuevo', args=['emisivo']), datos)
         self.assertEqual(r.status_code, 302)
         self.assertEqual(ImputacionPago.objects.filter(liquidacion=sal.liquidacion, servicio=None).count(), 2)
         self.assertEqual(sal.estado_pagos()['estado'], 'pagada')
@@ -264,7 +270,7 @@ class SalidasTest(TestCase):
         aplic = sal.liquidacion.aplicaciones_pagos()[sal.pk]
         self.assertEqual(sum(a['importe'] for a in aplic), sal.total())
         self.assertContains(self.client.get(reverse('marcoantonio:salida', args=[sal.pk])), 'Pagada')
-        self.assertContains(self.client.get(reverse('marcoantonio:salidas') + '?estado=pagadas'), 'CAFAYATE')
+        self.assertContains(self.client.get(reverse('marcoantonio:salidas', args=['emisivo']) + '?estado=pagadas'), 'CAFAYATE')
 
 
 class FacturaMTest(TestCase):
@@ -279,7 +285,7 @@ class FacturaMTest(TestCase):
     def test_factura_m_y_su_pago_van_al_efectivo(self):
         datos = {'fecha': '2026-10-02', 'tipo': 'FAC M', 'numero': '00020-00000411', 'importe': '100000',
                  'motivo': 'cierre', 'observaciones': '', **self._imp(FACTURADA, '100000')}
-        self.client.post(reverse('marcoantonio:comprobante_nuevo'), datos)
+        self.client.post(reverse('marcoantonio:comprobante_nuevo', args=['emisivo']), datos)
         fac = Comprobante.objects.get()
         self.assertTrue(fac.en_negro)
         self.assertEqual(fac.imputaciones.get().parte, EFECTIVO)
@@ -287,7 +293,7 @@ class FacturaMTest(TestCase):
         datos = {'fecha': '2026-10-05', 'medio': 'transferencia', 'moneda': 'ARS', 'importe_origen': '100000',
                  'tipo_cambio': '1', 'banco_referencia': '', 'tipo_recibo': 'REC A', 'numero_recibo': '1',
                  'comprobante': fac.pk, 'observaciones': '', **self._imp(FACTURADA, '100000')}
-        self.client.post(reverse('marcoantonio:pago_nuevo'), datos)
+        self.client.post(reverse('marcoantonio:pago_nuevo', args=['emisivo']), datos)
         pago = Pago.objects.get()
         self.assertTrue(pago.en_negro)
         self.assertEqual(pago.imputaciones.get().parte, EFECTIVO)
@@ -295,6 +301,55 @@ class FacturaMTest(TestCase):
         # Una factura A no se toca
         datos = {'fecha': '2026-10-02', 'tipo': 'FAC A', 'numero': '00008-00000400', 'importe': '110500',
                  'motivo': 'cierre', 'observaciones': '', **self._imp(FACTURADA, '110500')}
-        self.client.post(reverse('marcoantonio:comprobante_nuevo'), datos)
+        self.client.post(reverse('marcoantonio:comprobante_nuevo', args=['emisivo']), datos)
         self.assertEqual(Comprobante.objects.get(tipo='FAC A').imputaciones.get().parte, FACTURADA)
-        self.assertContains(self.client.get(reverse('marcoantonio:comprobantes')), 'en negro')
+        self.assertContains(self.client.get(reverse('marcoantonio:comprobantes', args=['emisivo'])), 'en negro')
+
+
+class RubrosTest(TestCase):
+    def setUp(self):
+        self.client.force_login(User.objects.create_superuser('tatiana', 't@x.com', 'clave-segura-123'))
+
+    def _salida(self, rubro, servicio):
+        datos = {'fecha': '2026-11-10', 'unidad': 'MINIBUS', 'servicio': servicio, 'tarifa_minima': '',
+                 'tarifa_intermedia': '', 'tarifa_optima': '', 'tarifa_elegida': 'otra', 'tarifa_otra': '1000000',
+                 'unidades_agua': '0', 'observaciones': ''}
+        self.client.post(reverse('marcoantonio:salida_nueva', args=[rubro]), datos)
+        return ServicioMAT.objects.get(servicio=servicio)
+
+    def test_cada_rubro_por_separado(self):
+        edu = self._salida('educativo', 'COLEGIO A CACHI')
+        esp = self._salida('especiales', 'CONTRATO ESPECIAL')
+        emi = self._salida('emisivo', 'MENDOZA')
+        # Mismo mes, una liquidación por rubro, cada una con su forma de cobro
+        self.assertEqual(Liquidacion.objects.filter(periodo=date(2026, 11, 1)).count(), 3)
+        self.assertEqual(edu.importe(EFECTIVO), 0)                      # educativo: todo facturado
+        self.assertEqual(edu.importe(FACTURADA), Decimal('1105000.00'))
+        self.assertEqual(esp.importe(FACTURADA), 0)                     # especiales: todo sin factura
+        self.assertEqual(esp.importe(EFECTIVO), Decimal('1000000.00'))
+        self.assertEqual(emi.importe(EFECTIVO), Decimal('500000.00'))   # emisivo: mitad y mitad
+        # Cada pestaña muestra solo lo suyo
+        r = self.client.get(reverse('marcoantonio:salidas', args=['educativo']))
+        self.assertContains(r, 'COLEGIO A CACHI')
+        self.assertNotContains(r, 'MENDOZA')
+        # Un pago de especiales solo se puede aplicar a meses de especiales
+        r = self.client.get(reverse('marcoantonio:pago_nuevo', args=['especiales']))
+        self.assertEqual(list(r.context['formset'].forms[0].fields['liquidacion'].queryset), [esp.liquidacion])
+        datos = {'fecha': '2026-11-20', 'medio': 'efectivo', 'moneda': 'ARS', 'importe_origen': '1000000',
+                 'tipo_cambio': '1', 'banco_referencia': '', 'tipo_recibo': '', 'numero_recibo': '',
+                 'comprobante': '', 'observaciones': '',
+                 'imp-TOTAL_FORMS': '1', 'imp-INITIAL_FORMS': '0', 'imp-MIN_NUM_FORMS': '0', 'imp-MAX_NUM_FORMS': '1000',
+                 'imp-0-liquidacion': emi.liquidacion_id, 'imp-0-parte': EFECTIVO, 'imp-0-importe': '1000000',
+                 'imp-0-observaciones': ''}
+        r = self.client.post(reverse('marcoantonio:pago_nuevo', args=['especiales']), datos)
+        self.assertEqual(r.status_code, 200)   # rechazado: ese mes es de otro rubro
+        datos['imp-0-liquidacion'] = esp.liquidacion_id
+        r = self.client.post(reverse('marcoantonio:pago_nuevo', args=['especiales']), datos)
+        self.assertRedirects(r, reverse('marcoantonio:pagos', args=['especiales']))
+        self.assertEqual(Pago.objects.get().rubro, 'especiales')
+        self.assertEqual(esp.estado_pagos()['estado'], 'pagada')
+        self.assertEqual(emi.estado_pagos()['estado'], 'pendiente')
+        # Panel general con los tres rubros
+        r = self.client.get(reverse('marcoantonio:panel'))
+        for nombre in ('Educativo', 'Especiales', 'Emisivo en bus'):
+            self.assertContains(r, nombre)

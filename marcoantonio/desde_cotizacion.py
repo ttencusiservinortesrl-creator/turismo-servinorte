@@ -61,7 +61,7 @@ def datos_de(cot):
 
 
 @transaction.atomic
-def crear_salida(cot, tarifas=None):
+def crear_salida(cot, tarifas=None, rubro='emisivo'):
     """Crea la salida en el mes que corresponde (lo crea si no existe). Devuelve la salida.
     `tarifas`: lo que devuelve leer_tarifas (si no, se vende al precio de la cotización)."""
     from .views import _liquidacion_del_mes
@@ -71,7 +71,7 @@ def crear_salida(cot, tarifas=None):
     datos = datos_de(cot)
     if tarifas:
         datos.update(tarifas)
-    return ServicioMAT.objects.create(liquidacion=_liquidacion_del_mes(datos['fecha']), cotizacion=cot, **datos)
+    return ServicioMAT.objects.create(liquidacion=_liquidacion_del_mes(datos['fecha'], rubro), cotizacion=cot, **datos)
 
 
 def actualizar_precio(cot, anterior):

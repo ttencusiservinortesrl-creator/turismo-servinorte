@@ -42,33 +42,35 @@ def generar():
     ws = _hoja(wb, 'Liquidaciones', ['Código', 'Mes', 'Cierre', 'Neto total', '% facturado', 'Facturada neto',
                                      'IVA', 'Facturada (neto + IVA)', 'Pagado facturada', 'Saldo facturada',
                                      'Comprobado facturada', 'Efectivo sin factura', 'Pagado efectivo', 'Saldo efectivo',
-                                     'Comprobado efectivo'],
-               [13, 16, 12, 16, 10, 16, 14, 18, 16, 16, 16, 18, 16, 16, 16], primera=True)
+                                     'Comprobado efectivo', 'Rubro'],
+               [13, 16, 12, 16, 10, 16, 14, 18, 16, 16, 16, 18, 16, 16, 16, 16], primera=True)
     for l in Liquidacion.objects.prefetch_related('servicios', 'entregas__articulo'):
         ws.append([l.codigo, l.nombre, l.fecha_cierre, float(l.neto()), float(l.porcentaje_facturado) / 100,
                    float(l.facturada_neto()), float(l.facturada_iva()), float(l.importe(FACTURADA)),
                    float(l.pagado(FACTURADA)), float(l.saldo(FACTURADA)), float(l.comprobado(FACTURADA)),
-                   float(l.importe(EFECTIVO)), float(l.pagado(EFECTIVO)), float(l.saldo(EFECTIVO)), float(l.comprobado(EFECTIVO))])
+                   float(l.importe(EFECTIVO)), float(l.pagado(EFECTIVO)), float(l.saldo(EFECTIVO)), float(l.comprobado(EFECTIVO)),
+                   l.get_rubro_display()])
     _formatear(ws, pesos=(4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15), fechas=(3,))
     for fila in ws.iter_rows(min_row=2, min_col=5, max_col=5):
         fila[0].number_format = '0.00%'
 
     ws = _hoja(wb, 'Pagos', ['Ref.', 'Fecha', 'Forma', 'Moneda', 'Importe', 'T.C.', 'Importe $', 'Recibo', 'N° recibo',
-                             'Factura que paga', 'Imputado', 'Sin imputar', 'Banco / ref.', 'Observaciones', 'Anulado'],
-               [8, 12, 14, 8, 15, 8, 16, 9, 18, 20, 16, 16, 18, 40, 9])
+                             'Factura que paga', 'Imputado', 'Sin imputar', 'Banco / ref.', 'Observaciones', 'Anulado', 'Rubro'],
+               [8, 12, 14, 8, 15, 8, 16, 9, 18, 20, 16, 16, 18, 40, 9, 16])
     for p in Pago.objects.select_related('comprobante'):
         ws.append([p.ref_planilla, p.fecha, p.get_medio_display(), p.moneda, float(p.importe_origen), float(p.tipo_cambio),
                    float(p.importe_ars), p.tipo_recibo, p.numero_recibo, str(p.comprobante) if p.comprobante else '',
-                   float(p.imputado()), float(p.sin_imputar()), p.banco_referencia, p.observaciones, 'Sí' if p.anulado else ''])
+                   float(p.imputado()), float(p.sin_imputar()), p.banco_referencia, p.observaciones, 'Sí' if p.anulado else '',
+                   p.get_rubro_display()])
     _formatear(ws, pesos=(5, 7, 11, 12), fechas=(2,))
 
     ws = _hoja(wb, 'Comprobantes', ['Ref.', 'Fecha', 'Tipo', 'Número', 'Importe', 'Motivo', 'Imputado', 'Sin imputar',
-                                    'Anticipado', 'Observaciones', 'Anulado'],
-               [8, 12, 8, 20, 16, 22, 16, 16, 30, 40, 9])
+                                    'Anticipado', 'Observaciones', 'Anulado', 'Rubro'],
+               [8, 12, 8, 20, 16, 22, 16, 16, 30, 40, 9, 16])
     for c in Comprobante.objects.prefetch_related('imputaciones__liquidacion'):
         anticipos = ', '.join(f'{imp.liquidacion.codigo} ({motivo})' for imp, motivo in c.anticipos())
         ws.append([c.ref_planilla, c.fecha, c.tipo, c.numero, float(c.importe), c.get_motivo_display(), float(c.imputado()),
-                   float(c.sin_imputar()), anticipos, c.observaciones, 'Sí' if c.anulado else ''])
+                   float(c.sin_imputar()), anticipos, c.observaciones, 'Sí' if c.anulado else '', c.get_rubro_display()])
     _formatear(ws, pesos=(5, 7, 8), fechas=(2,))
 
     ws = _hoja(wb, 'Imputaciones', ['Origen', 'Ref.', 'Fecha', 'Liquidación', 'Parte', 'Importe', 'Observaciones'],

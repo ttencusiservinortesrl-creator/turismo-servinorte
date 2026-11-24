@@ -3,8 +3,8 @@
 {% block title %}{{ titulo }}{% endblock %}
 {% block content %}
 <div class="encabezado">
-    <h1><span class="icono"><i class="bi {% if titulo == 'Pago' %}bi-cash-coin{% else %}bi-receipt{% endif %}"></i></span> {% if objeto.pk %}Editar{% else %}Cargar{% endif %} {{ titulo|lower }}</h1>
-    <a class="btn btn-outline-secondary" href="{% if titulo == 'Pago' %}{% url 'marcoantonio:pagos' %}{% else %}{% url 'marcoantonio:comprobantes' %}{% endif %}">Volver</a>
+    <h1><span class="icono"><i class="bi {% if titulo == 'Pago' %}bi-cash-coin{% else %}bi-receipt{% endif %}"></i></span> {% if objeto.pk %}Editar{% else %}Cargar{% endif %} {{ titulo|lower }} · {{ rubro_nombre }}</h1>
+    <a class="btn btn-outline-secondary" href="{% if titulo == 'Pago' %}{% url 'marcoantonio:pagos' rubro %}{% else %}{% url 'marcoantonio:comprobantes' rubro %}{% endif %}">Volver</a>
 </div>
 <form method="post">
     {% csrf_token %}

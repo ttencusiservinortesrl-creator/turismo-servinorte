@@ -40,9 +40,9 @@ class LiquidacionForm(Estilado, forms.ModelForm):
 
     def clean_mes(self):
         mes = self.cleaned_data['mes'].replace(day=1)
-        otra = Liquidacion.objects.filter(periodo=mes).exclude(pk=self.instance.pk)
+        otra = Liquidacion.objects.filter(periodo=mes, rubro=self.instance.rubro).exclude(pk=self.instance.pk)
         if otra.exists():
-            raise forms.ValidationError('Ya hay una liquidación para ese mes.')
+            raise forms.ValidationError(f'Ya hay una liquidación de {self.instance.get_rubro_display()} para ese mes.')
         return mes
 
     def save(self, commit=True):
@@ -152,7 +152,7 @@ class PagoForm(Estilado, forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['comprobante'].queryset = Comprobante.objects.filter(anulado=False).order_by('-fecha')
+        self.fields['comprobante'].queryset = Comprobante.objects.filter(anulado=False, rubro=self.instance.rubro).order_by('-fecha')
         self.fields['comprobante'].empty_label = '— sin factura —'
 
 
@@ -161,11 +161,12 @@ class ImputacionForm(Estilado, forms.ModelForm):
     class Meta:
         fields = ['liquidacion', 'parte', 'importe', 'observaciones']
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, rubro=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['liquidacion'].label = 'Mes'
         self.fields['liquidacion'].label_from_instance = lambda l: f'{l.nombre} ({l.servicios.count()} salidas)'
-        self.fields['liquidacion'].queryset = Liquidacion.objects.order_by('-periodo')
+        liquidaciones = Liquidacion.objects.order_by('-periodo')
+        self.fields['liquidacion'].queryset = liquidaciones.filter(rubro=rubro) if rubro else liquidaciones
 
 
 class ImputacionPagoForm(ImputacionForm):

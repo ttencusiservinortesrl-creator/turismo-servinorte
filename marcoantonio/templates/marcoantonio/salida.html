@@ -6,7 +6,7 @@
     <h1><span class="icono"><i class="bi bi-bus-front"></i></span> {{ sal.servicio }} · {{ sal.fecha|date:"d/m/Y" }}
         <span class="fs-6 align-middle">{% if pagos.estado == 'parcial' %}<span class="badge pago-parcial">Debe $ {{ pagos.saldo|pesos }}</span>{% elif pagos.estado == 'pendiente' %}<span class="badge pago-pendiente">Debe $ {{ pagos.saldo|pesos }}</span>{% else %}{% include 'marcoantonio/_estado_pago.html' with e=pagos.estado %}{% endif %}</span></h1>
     <a class="btn btn-outline-secondary" href="{% url 'marcoantonio:servicio_editar' liq.pk sal.pk %}"><i class="bi bi-pencil"></i> Editar salida</a>
-    <a class="btn btn-outline-secondary" href="{% url 'marcoantonio:salidas' %}">Volver</a>
+    <a class="btn btn-outline-secondary" href="{% url 'marcoantonio:salidas' rubro %}">Volver</a>
 </div>
 {% include 'marcoantonio/_menu.html' %}
 <div class="small text-muted mb-3">
@@ -43,7 +43,7 @@
                 <tr><td colspan="2" class="small">
                     <span class="text-muted">Comprobantes del mes:</span>
                     {% for c, imps in comprobantes_mes %}<a href="{% url 'marcoantonio:comprobante_editar' c.pk %}">{{ c }}</a>{% if c.en_negro %} <span class="text-muted">(en negro, sin IVA)</span>{% endif %}{% if not forloop.last %}, {% endif %}
-                    {% empty %}ninguno todavía · <a href="{% url 'marcoantonio:comprobante_nuevo' %}">cargar</a>{% endfor %}
+                    {% empty %}ninguno todavía · <a href="{% url 'marcoantonio:comprobante_nuevo' rubro %}">cargar</a>{% endfor %}
                 </td></tr>
             </table>
         </div>
@@ -96,7 +96,7 @@
                 <tr class="fw-semibold table-light"><td colspan="2">Falta cobrar</td><td class="num {% if pagos.saldo >= 1 %}text-danger{% else %}text-success{% endif %}">$ {{ pagos.saldo|pesos:2 }}</td></tr>
             </table>
             <div class="card-body">
-                <a class="btn btn-outline-primary" href="{% url 'marcoantonio:pago_nuevo' %}?liquidacion={{ liq.pk }}"><i class="bi bi-cash-coin"></i> Cargar pago de {{ liq.nombre }}</a>
+                <a class="btn btn-outline-primary" href="{% url 'marcoantonio:pago_nuevo' rubro %}?liquidacion={{ liq.pk }}"><i class="bi bi-cash-coin"></i> Cargar pago de {{ liq.nombre }}</a>
                 <div class="form-text">Los pagos son del mes: cubren las salidas de {{ liq.nombre }} de la más vieja a la más nueva.</div>
             </div>
         </div>

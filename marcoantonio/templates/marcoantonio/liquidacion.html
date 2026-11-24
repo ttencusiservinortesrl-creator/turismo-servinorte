@@ -3,13 +3,13 @@
 {% block title %}Liquidación {{ liq.nombre }}{% endblock %}
 {% block content %}
 <div class="encabezado">
-    <h1><span class="icono"><i class="bi bi-journal-text"></i></span> Liquidación {{ liq.nombre }}
+    <h1><span class="icono"><i class="bi bi-journal-text"></i></span> {{ liq.get_rubro_display }} · liquidación {{ liq.nombre }}
         <span class="fs-6 align-middle">{% if liq.cerrada %}<span class="badge estado-aceptada">cerrada el {{ liq.fecha_cierre|date:"d/m/Y" }}</span>{% else %}<span class="badge estado-pendiente">abierta</span>{% endif %}</span></h1>
     <a class="btn btn-outline-secondary" href="{% url 'marcoantonio:liquidacion_editar' liq.pk %}"><i class="bi bi-pencil"></i> Editar</a>
     <form method="post" action="{% url 'marcoantonio:liquidacion_cerrar' liq.pk %}" onsubmit="return confirm('{% if liq.cerrada %}¿Reabrir la liquidación?{% else %}¿Cerrar la liquidación? Pasa a contar en la cuenta corriente.{% endif %}');">{% csrf_token %}
         <button class="btn {% if liq.cerrada %}btn-outline-secondary{% else %}btn-primary{% endif %}" type="submit"><i class="bi {% if liq.cerrada %}bi-unlock{% else %}bi-lock{% endif %}"></i> {% if liq.cerrada %}Reabrir{% else %}Cerrar liquidación{% endif %}</button></form>
-    <a class="btn btn-outline-primary" href="{% url 'marcoantonio:pago_nuevo' %}?liquidacion={{ liq.pk }}"><i class="bi bi-cash-coin"></i> Cargar pago del mes</a>
-    <a class="btn btn-outline-secondary" href="{% url 'marcoantonio:salidas' %}">Volver</a>
+    <a class="btn btn-outline-primary" href="{% url 'marcoantonio:pago_nuevo' rubro %}?liquidacion={{ liq.pk }}"><i class="bi bi-cash-coin"></i> Cargar pago del mes</a>
+    <a class="btn btn-outline-secondary" href="{% url 'marcoantonio:salidas' rubro %}">Volver</a>
 </div>
 {% include 'marcoantonio/_menu.html' %}
 

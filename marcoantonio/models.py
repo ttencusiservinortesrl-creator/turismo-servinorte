@@ -14,6 +14,14 @@ MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto
          'noviembre', 'diciembre']
 
 FACTURADA, EFECTIVO = 'facturada', 'efectivo'
+
+# Rubros de Marco Antonio: cada uno con sus liquidaciones, pagos y comprobantes por separado.
+EDUCATIVO, ESPECIALES, EMISIVO = 'educativo', 'especiales', 'emisivo'
+RUBROS = [(EDUCATIVO, 'Educativo'), (ESPECIALES, 'Especiales'), (EMISIVO, 'Emisivo en bus')]
+NOMBRE_RUBRO = dict(RUBROS)
+# % que se factura por defecto: educativo todo facturado, especiales todo sin factura, emisivo mitad y mitad.
+FACTURADO_POR_RUBRO = {EDUCATIVO: Decimal(100), ESPECIALES: Decimal(0), EMISIVO: Decimal(50)}
+CODIGO_RUBRO = {EDUCATIVO: 'EDU', ESPECIALES: 'ESP', EMISIVO: 'LIQ'}
 PARTES = [(FACTURADA, 'Parte facturada (neto + IVA)'), (EFECTIVO, 'Parte en efectivo sin factura')]
 
 
@@ -44,7 +52,8 @@ def pesos_texto(valor):
 
 
 class Liquidacion(models.Model):
-    periodo = models.DateField('Mes', unique=True, help_text='Se guarda el primer día del mes.')
+    rubro = models.CharField(max_length=12, choices=RUBROS, default=EMISIVO)
+    periodo = models.DateField('Mes', help_text='Se guarda el primer día del mes.')
     fecha_cierre = models.DateField('Fecha de cierre', null=True, blank=True)
     porcentaje_facturado = models.DecimalField('% que se factura', max_digits=5, decimal_places=2, default=Decimal(50),
         help_text='El resto es la parte en efectivo sin factura.')
@@ -56,12 +65,13 @@ class Liquidacion(models.Model):
     creado = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ['periodo']
+        ordering = ['periodo', 'rubro']
         verbose_name = 'liquidación'
         verbose_name_plural = 'liquidaciones'
+        constraints = [models.UniqueConstraint(fields=['rubro', 'periodo'], name='una_liquidacion_por_rubro_y_mes')]
 
     def __str__(self):
-        return f'Liquidación {self.nombre}'
+        return f'Liquidación {self.get_rubro_display()} {self.nombre}'
 
     @property
     def cerrada(self):
@@ -73,7 +83,11 @@ class Liquidacion(models.Model):
 
     @property
     def codigo(self):
-        return f'LIQ-{self.periodo.year}-{self.periodo.month:02d}'
+        return f'{CODIGO_RUBRO[self.rubro]}-{self.periodo.year}-{self.periodo.month:02d}'
+
+    @property
+    def nombre_completo(self):
+        return f'{self.get_rubro_display()} · {self.nombre}'
 
     # --- Composición ---
     def total_servicios(self):
@@ -306,6 +320,7 @@ class Comprobante(models.Model):
     MOTIVOS = [('servicio', 'Servicios del mes'), ('a_cuenta', 'A cuenta (al recibir un pago)'), ('cierre', 'Cierre de liquidación'),
                ('ajuste', 'Ajuste / compensación'), ('prueba', 'Prueba'), ('otro', 'Otro')]
 
+    rubro = models.CharField(max_length=12, choices=RUBROS, default=EMISIVO)
     fecha = models.DateField()
     tipo = models.CharField(max_length=6, choices=TIPOS, default='FAC A')
     numero = models.CharField('N° de comprobante', max_length=40)
@@ -364,6 +379,7 @@ class Pago(models.Model):
     MEDIOS = [('efectivo', 'Efectivo'), ('transferencia', 'Transferencia'), ('cheque', 'Cheque'), ('otro', 'Otro')]
     RECIBOS = [('REC A', 'Recibo A'), ('REC M', 'Recibo M'), ('', 'Sin recibo')]
 
+    rubro = models.CharField(max_length=12, choices=RUBROS, default=EMISIVO)
     fecha = models.DateField()
     medio = models.CharField('Forma de pago', max_length=14, choices=MEDIOS)
     moneda = models.CharField(max_length=3, choices=[('ARS', 'Pesos'), ('USD', 'Dólares')], default='ARS')

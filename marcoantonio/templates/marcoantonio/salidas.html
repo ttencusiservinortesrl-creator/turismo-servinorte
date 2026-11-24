@@ -1,11 +1,11 @@
 {% extends 'base.html' %}
 {% load formato %}
-{% block title %}Salidas de Marco Antonio{% endblock %}
+{% block title %}{{ rubro_nombre }} · Marco Antonio{% endblock %}
 {% block content %}
 <div class="encabezado">
-    <h1><span class="icono"><i class="bi bi-bus-front"></i></span> Salidas de Marco Antonio</h1>
-    <a class="btn btn-primary" href="{% url 'marcoantonio:salida_nueva' %}"><i class="bi bi-plus-lg"></i> Nueva salida</a>
-    <a class="btn btn-outline-primary" href="{% url 'marcoantonio:pago_nuevo' %}"><i class="bi bi-cash-coin"></i> Cargar pago</a>
+    <h1><span class="icono"><i class="bi bi-bus-front"></i></span> {{ rubro_nombre }} · salidas</h1>
+    <a class="btn btn-primary" href="{% url 'marcoantonio:salida_nueva' rubro %}"><i class="bi bi-plus-lg"></i> Nueva salida</a>
+    <a class="btn btn-outline-primary" href="{% url 'marcoantonio:pago_nuevo' rubro %}"><i class="bi bi-cash-coin"></i> Cargar pago</a>
 </div>
 {% include 'marcoantonio/_menu.html' %}
 <form class="d-flex flex-wrap gap-2 align-items-center mb-3" method="get">
@@ -29,7 +29,7 @@
         {% if not g.liq.cerrada %}<span class="badge estado-pendiente">abierta</span>{% endif %}
         <span class="small fw-normal text-muted ms-2">Mes: $ {{ g.total|pesos }} · pagado $ {{ g.pagado|pesos }} ·
             <span class="{% if g.saldo >= 1 %}text-danger{% endif %}">falta $ {{ g.saldo|pesos }}</span></span>
-        <a class="btn btn-sm btn-outline-primary ms-auto" href="{% url 'marcoantonio:pago_nuevo' %}?liquidacion={{ g.liq.pk }}"><i class="bi bi-cash-coin"></i> Cargar pago del mes</a>
+        <a class="btn btn-sm btn-outline-primary ms-auto" href="{% url 'marcoantonio:pago_nuevo' rubro %}?liquidacion={{ g.liq.pk }}"><i class="bi bi-cash-coin"></i> Cargar pago del mes</a>
     </div>
     <div class="list-group list-group-flush">
         {% for f in g.filas %}{% with s=f.salida p=f.pagos %}
@@ -47,7 +47,7 @@
 {% empty %}
 <div class="card"><div class="card-body text-center text-muted py-4">
     No hay salidas {% if estado == 'pendientes' %}con saldo{% elif estado == 'pagadas' %}pagadas{% endif %}.
-    <a href="{% url 'marcoantonio:salida_nueva' %}">Cargar una salida</a>
+    <a href="{% url 'marcoantonio:salida_nueva' rubro %}">Cargar una salida</a>
 </div></div>
 {% endfor %}
 <div class="form-text">Los pagos son mensuales: lo que se paga de un mes cubre sus salidas de la más vieja a la más nueva. El total de cada salida incluye el IVA de la parte facturada.</div>

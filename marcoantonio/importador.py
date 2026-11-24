@@ -15,7 +15,7 @@ from decimal import Decimal, InvalidOperation
 import openpyxl
 from django.db import transaction
 
-from .models import (EFECTIVO, FACTURADA, Articulo, forzar_efectivo, pesos_texto, Comprobante, EntregaInsumo, ImputacionComprobante, ImputacionPago,
+from .models import (EFECTIVO, EMISIVO, FACTURADA, Articulo, forzar_efectivo, pesos_texto, Comprobante, EntregaInsumo, ImputacionComprobante, ImputacionPago,
                      Liquidacion, Pago, ServicioMAT, redondear)
 
 PARTES = {'EFECTIVO NETO': EFECTIVO, 'TRANSFERENCIA C/IVA': FACTURADA, 'TRANSFERENCIA': FACTURADA, 'FACTURADA': FACTURADA}
@@ -198,14 +198,16 @@ def importar(contenido):
             raise ErrorImportacion(f'La planilla no tiene la hoja "{hoja}".')
     avisos = []
 
-    # Se borra lo anterior de Marco Antonio (carga inicial).
-    ImputacionPago.objects.all().delete()
-    ImputacionComprobante.objects.all().delete()
-    Pago.objects.all().delete()
-    Comprobante.objects.all().delete()
-    EntregaInsumo.objects.all().delete()
-    ServicioMAT.objects.all().delete()
-    Liquidacion.objects.all().delete()
+    # La planilla es la de Emisivo en bus: se borra lo anterior de ese rubro (los otros no se tocan).
+    ImputacionPago.objects.filter(liquidacion__rubro=EMISIVO).delete()
+    ImputacionComprobante.objects.filter(liquidacion__rubro=EMISIVO).delete()
+    ImputacionPago.objects.filter(pago__rubro=EMISIVO).delete()
+    ImputacionComprobante.objects.filter(comprobante__rubro=EMISIVO).delete()
+    Pago.objects.filter(rubro=EMISIVO).delete()
+    Comprobante.objects.filter(rubro=EMISIVO).delete()
+    EntregaInsumo.objects.filter(liquidacion__rubro=EMISIVO).delete()
+    ServicioMAT.objects.filter(liquidacion__rubro=EMISIVO).delete()
+    Liquidacion.objects.filter(rubro=EMISIVO).delete()
 
     # Liquidaciones
     ws = wb['LIQUIDACIONES']
@@ -228,7 +230,7 @@ def importar(contenido):
         if not m:
             continue
         periodo = date(int(m.group(2)), int(m.group(1)), 1)
-        liq = Liquidacion.objects.filter(periodo=periodo).first()
+        liq = Liquidacion.objects.filter(periodo=periodo, rubro=EMISIVO).first()
         if not liq:
             liq = Liquidacion.objects.create(periodo=periodo, porcentaje_iva=iva)
             por_codigo[liq.codigo] = liq
