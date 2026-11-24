@@ -812,3 +812,10 @@ class MarcoAntonioDesdeCotizacionTest(BaseVistas):
                          self.post_datos(numero=cot.numero, nuevo_cliente='', cliente=cot.cliente.pk, tarifa_neta='1800000'))
         sal.refresh_from_db()
         self.assertEqual(sal.tarifa, sug['intermedia'])
+
+
+class SaludTest(TestCase):
+    def test_salud_sin_login(self):
+        r = self.client.get('/salud/')
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json(), {'ok': True})

@@ -1,0 +1,25 @@
+# Mantiene activa la app aunque nadie la use: el plan gratuito de Supabase pausa la base tras una
+# semana sin uso (pasó en noviembre de 2026: la app daba "Server Error (500)" al ingresar).
+# Dos veces por día pide /salud/, que lee la base.
+name: Mantener activa la base
+
+on:
+  schedule:
+    - cron: '0 11 * * *'   # 08:00 de Argentina
+    - cron: '0 23 * * *'   # 20:00 de Argentina
+  workflow_dispatch:
+
+jobs:
+  despertar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pedir /salud/ (Render puede tardar en despertar)
+        run: |
+          for intento in 1 2 3 4 5; do
+            if curl -fsS --max-time 120 https://servinorte-turismo.onrender.com/salud/; then
+              exit 0
+            fi
+            sleep 60
+          done
+          echo "La app o la base no respondieron: revisar Render y Supabase." >&2
+          exit 1
